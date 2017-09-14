@@ -8,6 +8,7 @@
 
 import Foundation
 import Dispatch
+import ServerSecurity
 
 ///:nodoc:
 public enum PoCSocketError: Error {
@@ -22,11 +23,18 @@ public enum PoCSocketError: Error {
 ///  Intentionally a thin layer over `recv(2)`/`send(2)` so uses the same argument types.
 ///  Note that no method names here are the same as any system call names.
 ///   This is because we expect the caller might need functionality we haven't implemented here.
-internal class PoCSocket {
+internal class PoCSocket: ConnectionDelegate {
     
     /// hold the file descriptor for the socket supplied by the OS. `-1` is invalid socket
     internal var socketfd: Int32 = -1
     
+    /// Return the file descriptor as a connection endpoint for ConnectionDelegate. (Readonly)
+    public var endpoint: ConnectionType {
+        get {
+            return ConnectionType.socket(self.socketfd)
+        }
+    }
+
     /// The TCP port the server is actually listening on. Set after system call completes
     internal var listeningPort: Int32 = -1
     
@@ -56,6 +64,31 @@ internal class PoCSocket {
         }
     }
 
+    /// Delegate that provides the TLS implementation
+    public var TLSdelegate: TLSServiceDelegate? = nil
+    
+    // track if connection is secure
+    private var isConnectionSecure: Bool {
+        get {
+            if self.TLSdelegate != nil {
+                return true
+            } else {
+                return false
+            }
+        }
+    }
+
+    func isObjectNotNil(object:AnyObject!) -> Bool
+    {
+        if let _:AnyObject = object
+        {
+            return true
+        }
+        
+        return false
+    }
+
+    
     /// Call recv(2) with buffer allocated by our caller and return the output
     ///
     /// - Parameters:
@@ -80,7 +113,17 @@ internal class PoCSocket {
         //Make sure data isn't re-used
         readBuffer.initialize(to: 0x0, count: maxLength)
         
-        let read = recv(self.socketfd, readBuffer, maxLength, Int32(0))
+        let read: Int
+        
+        switch isConnectionSecure {
+        case true:   // HTTPS
+            read = try TLSdelegate!.willReceive(into: readBuffer, bufSize: maxLength)
+            break
+        case false: // HTTP
+            read = recv(self.socketfd, readBuffer, maxLength, Int32(0))
+            break
+        }
+
         //Leave this as a local variable to facilitate Setting a Watchpoint in lldb
         return read
     }
@@ -106,7 +149,16 @@ internal class PoCSocket {
             throw PoCSocketError.InvalidBufferError
         }
 
-        let sent = send(self.socketfd, buffer, Int(bufSize), Int32(0))
+        let sent: Int
+        switch isConnectionSecure {
+        case true:   // HTTPS
+            sent = try TLSdelegate!.willSend(buffer: buffer, bufSize: Int(bufSize))
+            break
+        case false: // HTTP
+            sent = send(self.socketfd, buffer, Int(bufSize), Int32(0))
+            break
+        }
+
         //Leave this as a local variable to facilitate Setting a Watchpoint in lldb
        return sent
     }
@@ -114,6 +166,11 @@ internal class PoCSocket {
     /// Calls `shutdown(2)` and `close(2)` on a socket
     internal func shutdownAndClose() {
         self.isShuttingDown = true
+        
+        if isConnectionSecure {
+            TLSdelegate?.willDestroy()
+        }
+
         if socketfd < 1 {
             //Nothing to do. Maybe it was closed already
             return
@@ -167,6 +224,11 @@ internal class PoCSocket {
         retVal.isConnected = true
         retVal.socketfd = acceptFD
         
+        // Delegate does post accept handling and verification
+        if isConnectionSecure {
+                try TLSdelegate?.didAccept(connection: retVal)
+        }
+        
         return retVal
     }
     
@@ -187,6 +249,11 @@ internal class PoCSocket {
             throw PoCSocketError.InvalidSocketError
         }
         
+        // Initialize delegate
+        if isConnectionSecure {
+            try TLSdelegate?.didCreateServer()
+        }
+
         var on: Int32 = 1
         // Allow address reuse
         if setsockopt(self.socketfd, SOL_SOCKET, SO_REUSEADDR, &on, socklen_t(MemoryLayout<Int32>.size)) < 0 {

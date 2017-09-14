@@ -8,6 +8,7 @@
 
 import Dispatch
 import Foundation
+import TLSService
 
 
 // MARK: Server
@@ -75,6 +76,27 @@ public class PoCSocketSimpleServer: CurrentConnectionCounting {
         if acceptCount > 0 {
             acceptMax = acceptCount
         }
+        #if os(Linux)
+            let myCertPath = URL(fileURLWithPath: #file).appendingPathComponent("../../../Certs/Self-Signed/cert.pem").standardized
+            let myKeyPath = URL(fileURLWithPath: #file).appendingPathComponent("../../../Certs/Self-Signed/key.pem").standardized
+            
+            let config = TLSService.Configuration(withCACertificateDirectory: nil, usingCertificateFile: myCertPath.path, withKeyFile: myKeyPath.path, usingSelfSignedCerts: true)
+        #else
+            /*
+            let myP12 = URL(fileURLWithPath: #file).appendingPathComponent("../../../Certs/REMOVE.pfx").standardized
+            let myPassword = "password"
+            let config = TLSService.Configuration(withChainFilePath: myP12.path, withPassword: myPassword, usingSelfSignedCerts: false)
+            */
+            let myP12 = URL(fileURLWithPath: #file).appendingPathComponent("../../../Certs/Self-Signed/cert.pfx").standardized
+            let myPassword = "sw!ft!sC00l"
+            let config = TLSService.Configuration(withChainFilePath: myP12.path, withPassword: myPassword, usingSelfSignedCerts: true)
+        #endif
+        
+        // Setting up TLS...
+        let security = try TLSService(usingConfiguration: config)
+        self.serverSocket.TLSdelegate = security
+        
+
         try self.serverSocket.bindAndListen(on: port)
 
         pruneSocketTimer.setEventHandler { [weak self] in

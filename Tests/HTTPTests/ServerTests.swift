@@ -10,7 +10,12 @@ import XCTest
 
 @testable import HTTP
 
-class ServerTests: XCTestCase {
+class ServerTests: XCTestCase, URLSessionDelegate {
+    func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+        completionHandler(URLSession.AuthChallengeDisposition.useCredential, URLCredential(trust: challenge.protectionSpace.serverTrust!) )
+    }
+    
+
     func testResponseOK() {
         let request = HTTPRequest(method: .get, target: "/echo", httpVersion: HTTPVersion(major: 1, minor: 1), headers: ["X-foo": "bar"])
         let resolver = TestResponseResolver(request: request, requestBody: Data())
@@ -64,8 +69,9 @@ class ServerTests: XCTestCase {
         let server = HTTPServer()
         do {
             try server.start(port: 0, handler: OkHandler().handle)
-            let session = URLSession(configuration: URLSessionConfiguration.default)
-            let url = URL(string: "http://localhost:\(server.port)/")!
+            //let session = URLSession(configuration: URLSessionConfiguration.default)
+            let session = URLSession(configuration: URLSessionConfiguration.default, delegate: self, delegateQueue:OperationQueue.main) // needed for self-signed
+            let url = URL(string: "https://localhost:\(server.port)/")!
             print("Test \(#function) on port \(server.port)")
             let dataTask = session.dataTask(with: url) { (responseBody, rawResponse, error) in
                 let response = rawResponse as? HTTPURLResponse
@@ -93,8 +99,9 @@ class ServerTests: XCTestCase {
         let server = HTTPServer()
         do {
             try server.start(port: 0, handler: HelloWorldHandler().handle)
-            let session = URLSession(configuration: URLSessionConfiguration.default)
-            let url = URL(string: "http://localhost:\(server.port)/helloworld")!
+            //let session = URLSession(configuration: URLSessionConfiguration.default)
+            let session = URLSession(configuration: URLSessionConfiguration.default, delegate: self, delegateQueue:OperationQueue.main) // needed for self-signed
+            let url = URL(string: "https://localhost:\(server.port)/helloworld")!
             print("Test \(#function) on port \(server.port)")
             let dataTask = session.dataTask(with: url) { (responseBody, rawResponse, error) in
                 let response = rawResponse as? HTTPURLResponse
@@ -134,8 +141,9 @@ class ServerTests: XCTestCase {
             XCTFail("Error listening on port \(0): \(error). Use server.failed(callback:) to handle")
         }
 
-        let session = URLSession(configuration: URLSessionConfiguration.default)
-        let url = URL(string: "http://localhost:\(server.port)/helloworld")!
+        //let session = URLSession(configuration: URLSessionConfiguration.default)
+        let session = URLSession(configuration: URLSessionConfiguration.default, delegate: self, delegateQueue:OperationQueue.main) // needed for self-signed
+        let url = URL(string: "https://localhost:\(server.port)/helloworld")!
         print("Test \(#function) on port \(server.port)")
         let dataTask = session.dataTask(with: url) { (responseBody, rawResponse, error) in
             print("\(#function) dataTask returned")
@@ -166,8 +174,9 @@ class ServerTests: XCTestCase {
         let server = HTTPServer()
         do {
             try server.start(port: 0, handler: EchoHandler().handle)
-            let session = URLSession(configuration: URLSessionConfiguration.default)
-            let url = URL(string: "http://localhost:\(server.port)/echo")!
+            //let session = URLSession(configuration: URLSessionConfiguration.default)
+            let session = URLSession(configuration: URLSessionConfiguration.default, delegate: self, delegateQueue:OperationQueue.main) // needed for self-signed
+            let url = URL(string: "https://localhost:\(server.port)/echo")!
             print("Test \(#function) on port \(server.port)")
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
@@ -206,8 +215,9 @@ class ServerTests: XCTestCase {
         let server = HTTPServer()
         do {
             try server.start(port: 0, handler: EchoHandler().handle)
-            let session = URLSession(configuration: URLSessionConfiguration.default)
-            let url = URL(string: "http://localhost:\(server.port)/echo")!
+            //let session = URLSession(configuration: URLSessionConfiguration.default)
+            let session = URLSession(configuration: URLSessionConfiguration.default, delegate: self, delegateQueue:OperationQueue.main) // needed for self-signed
+            let url = URL(string: "https://localhost:\(server.port)/echo")!
             print("Test \(#function) on port \(server.port)")
             var request1 = URLRequest(url: url)
             request1.httpMethod = "POST"
@@ -293,8 +303,9 @@ class ServerTests: XCTestCase {
         let server = HTTPServer()
         do {
             try server.start(port: 0, handler: EchoHandler().handle)
-            let session = URLSession(configuration: URLSessionConfiguration.default)
-            let url1 = URL(string: "http://localhost:\(server.port)/echo")!
+            //let session = URLSession(configuration: URLSessionConfiguration.default)
+            let session = URLSession(configuration: URLSessionConfiguration.default, delegate: self, delegateQueue:OperationQueue.main) // needed for self-signed
+            let url1 = URL(string: "https://localhost:\(server.port)/echo")!
             print("Test \(#function) on port \(server.port)")
             var request1 = URLRequest(url: url1)
             request1.httpMethod = "POST"
@@ -314,7 +325,7 @@ class ServerTests: XCTestCase {
                 XCTAssertEqual(server.connectionCount, 1)
                 XCTAssertEqual(Int(HTTPResponseStatus.ok.code), response?.statusCode ?? 0)
                 XCTAssertEqual(testString1, String(data: responseBody ?? Data(), encoding: .utf8) ?? "Nil")
-                let url2 = URL(string: "http://127.0.0.1:\(server.port)/echo")!
+                let url2 = URL(string: "https://127.0.0.1:\(server.port)/echo")!
                 var request2 = URLRequest(url: url2)
                 request2.httpMethod = "POST"
                 request2.httpBody = testString2.data(using: .utf8)
@@ -333,7 +344,7 @@ class ServerTests: XCTestCase {
                     XCTAssertNotNil(responseBody2)
                     XCTAssertEqual(Int(HTTPResponseStatus.ok.code), response2?.statusCode ?? 0)
                     XCTAssertEqual(testString2, String(data: responseBody2 ?? Data(), encoding: .utf8) ?? "Nil")
-                    let url3 = URL(string: "http://0.0.0.0:\(server.port)/echo")!
+                    let url3 = URL(string: "https://0.0.0.0:\(server.port)/echo")!
                     var request3 = URLRequest(url: url3)
                     request3.httpMethod = "POST"
                     request3.httpBody = testString3.data(using: .utf8)
@@ -401,8 +412,9 @@ class ServerTests: XCTestCase {
         let server = HTTPServer()
         do {
             try server.start(port: 0, handler: EchoHandler().handle)
-            let session = URLSession(configuration: URLSessionConfiguration.default)
-            let url = URL(string: "http://localhost:\(server.port)/echo")!
+            //let session = URLSession(configuration: URLSessionConfiguration.default)
+            let session = URLSession(configuration: URLSessionConfiguration.default, delegate: self, delegateQueue:OperationQueue.main) // needed for self-signed
+            let url = URL(string: "https://localhost:\(server.port)/echo")!
             print("Test \(#function) on port \(server.port)")
             var request = URLRequest(url: url)
             request.httpMethod = "POST"

@@ -7,6 +7,10 @@ let package = Package(
     targets: [
         Target(name: "CHTTPParser"),
         Target(name: "HTTP", dependencies: [.Target(name: "CHTTPParser")]),
-    ]
+    ],
+    dependencies: [
+        .Package(url: "https://github.com/gtaban/security.git", majorVersion: 0),
+        .Package(url: "https://github.com/gtaban/TLSService.git", majorVersion: 0),
+        ]
 )
 
