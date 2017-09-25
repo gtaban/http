@@ -68,7 +68,7 @@ internal class PoCSocket: ConnectionDelegate {
     public var TLSdelegate: TLSServiceDelegate? = nil
     
     // track if connection is secure
-    private var isConnectionSecure: Bool {
+    public var isConnectionSecure: Bool {
         get {
             if self.TLSdelegate != nil {
                 return true
@@ -78,17 +78,6 @@ internal class PoCSocket: ConnectionDelegate {
         }
     }
 
-    func isObjectNotNil(object:AnyObject!) -> Bool
-    {
-        if let _:AnyObject = object
-        {
-            return true
-        }
-        
-        return false
-    }
-
-    
     /// Call recv(2) with buffer allocated by our caller and return the output
     ///
     /// - Parameters:
@@ -251,8 +240,9 @@ internal class PoCSocket: ConnectionDelegate {
         
         // Initialize delegate
         if isConnectionSecure {
+            print("TLS create server")
             try TLSdelegate?.didCreateServer()
-        }
+        } else {print("NOT SECURE")}
 
         var on: Int32 = 1
         // Allow address reuse
@@ -309,6 +299,25 @@ internal class PoCSocket: ConnectionDelegate {
         //print("listeningPort is \(listeningPort)")
     }
     
+    private func htonsPort(port: in_port_t) -> in_port_t {
+        #if os(Linux)
+            return htons(port)
+        #else
+            let isLittleEndian = Int(OSHostByteOrder()) == OSLittleEndian
+            return isLittleEndian ? _OSSwapInt16(port) : port
+        #endif
+    }
+
+    private func ntohsPort(port: in_port_t) -> in_port_t {
+        #if os(Linux)
+            return ntohs(port)
+        #else
+            let isLittleEndian = Int(OSHostByteOrder()) == OSLittleEndian
+            return isLittleEndian ? htonsPort(port: CUnsignedShort(port)) : port
+            //return isLittleEndian ? _OSSwapInt32(__uint32_t(port)) : port
+        #endif
+    }
+
     /// Check to see if socket is being used
     ///
     /// - Returns: whether socket is listening or connected

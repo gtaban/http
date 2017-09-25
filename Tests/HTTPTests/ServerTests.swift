@@ -7,14 +7,11 @@
 //
 
 import XCTest
+import ServerSecurity
 
 @testable import HTTP
 
-class ServerTests: XCTestCase, URLSessionDelegate {
-    func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
-        completionHandler(URLSession.AuthChallengeDisposition.useCredential, URLCredential(trust: challenge.protectionSpace.serverTrust!) )
-    }
-    
+class ServerTests: XCTestCase {
 
     func testResponseOK() {
         let request = HTTPRequest(method: .get, target: "/echo", httpVersion: HTTPVersion(major: 1, minor: 1), headers: ["X-foo": "bar"])
@@ -63,15 +60,36 @@ class ServerTests: XCTestCase, URLSessionDelegate {
         XCTAssertEqual("Hello, World!", resolver.responseBody?.withUnsafeBytes { String(bytes: $0, encoding: .utf8) } ?? "Nil")
     }
 
-    func testOkEndToEnd() {
-        let receivedExpectation = self.expectation(description: "Received web response \(#function)")
+    func testOkEndToEndSecure() {
+        let config = createCASignedTLSConfig()
+        testOkEndToEndInternal(config: config)
+    }
 
+    func testOkEndToEnd() {
+        testOkEndToEndInternal()
+    }
+
+    func testOkEndToEndInternal(config: TLSConfiguration? = nil) {
+        let receivedExpectation = self.expectation(description: "Received web response \(#function)")
+        let httpStr: String
+        
         let server = HTTPServer()
         do {
-            try server.start(port: 0, handler: OkHandler().handle)
-            //let session = URLSession(configuration: URLSessionConfiguration.default)
-            let session = URLSession(configuration: URLSessionConfiguration.default, delegate: self, delegateQueue:OperationQueue.main) // needed for self-signed
-            let url = URL(string: "https://localhost:\(server.port)/")!
+            if let config = config {
+                try server.start(port: 0, tls: config, handler: OkHandler().handle)
+                httpStr = "https"
+                
+            } else {
+                try server.start(port: 0, handler: OkHandler().handle)
+                httpStr = "http"
+            }
+            #if os(OSX)
+                let session = URLSession(configuration: URLSessionConfiguration.default, delegate: self, delegateQueue:OperationQueue.main) // needed for self-signed
+            #else
+                let session = URLSession(configuration: URLSessionConfiguration.default)
+            #endif
+
+            let url = URL(string: "\(httpStr)://localhost:\(server.port)/")!
             print("Test \(#function) on port \(server.port)")
             let dataTask = session.dataTask(with: url) { (responseBody, rawResponse, error) in
                 let response = rawResponse as? HTTPURLResponse
@@ -93,15 +111,37 @@ class ServerTests: XCTestCase, URLSessionDelegate {
         }
     }
 
+    func testHelloEndToEndSecure() {
+        let config = createCASignedTLSConfig()
+        testHelloEndToEndInternal(config: config)
+    }
+    
     func testHelloEndToEnd() {
+        testHelloEndToEndInternal()
+    }
+    
+    func testHelloEndToEndInternal(config: TLSConfiguration? = nil) {
+
         let receivedExpectation = self.expectation(description: "Received web response \(#function)")
+        let httpStr: String
 
         let server = HTTPServer()
         do {
-            try server.start(port: 0, handler: HelloWorldHandler().handle)
-            //let session = URLSession(configuration: URLSessionConfiguration.default)
-            let session = URLSession(configuration: URLSessionConfiguration.default, delegate: self, delegateQueue:OperationQueue.main) // needed for self-signed
-            let url = URL(string: "https://localhost:\(server.port)/helloworld")!
+            if let config = config {
+                try server.start(port: 0, tls: config, handler: HelloWorldHandler().handle)
+                httpStr = "https"
+                
+            } else {
+                try server.start(port: 0, handler: HelloWorldHandler().handle)
+                httpStr = "http"
+            }
+            #if os(OSX)
+                let session = URLSession(configuration: URLSessionConfiguration.default, delegate: self, delegateQueue:OperationQueue.main) // needed for self-signed
+            #else
+                let session = URLSession(configuration: URLSessionConfiguration.default)
+            #endif
+
+            let url = URL(string: "\(httpStr)://localhost:\(server.port)/helloworld")!
             print("Test \(#function) on port \(server.port)")
             let dataTask = session.dataTask(with: url) { (responseBody, rawResponse, error) in
                 let response = rawResponse as? HTTPURLResponse
@@ -124,8 +164,20 @@ class ServerTests: XCTestCase, URLSessionDelegate {
         }
     }
 
+    func testSimpleHelloEndToEndSecure() {
+        let config = createCASignedTLSConfig()
+        testSimpleHelloEndToEndInternal(config: config)
+    }
+    
     func testSimpleHelloEndToEnd() {
+        testSimpleHelloEndToEndInternal()
+    }
+    
+    func testSimpleHelloEndToEndInternal(config: TLSConfiguration? = nil) {
+        
         let receivedExpectation = self.expectation(description: "Received web response \(#function)")
+        let httpStr: String
+
         let simpleHelloWebApp = SimpleResponseCreator { (_, body) -> SimpleResponseCreator.Response in
             return SimpleResponseCreator.Response(
                 status: .ok,
@@ -136,47 +188,79 @@ class ServerTests: XCTestCase, URLSessionDelegate {
 
         let server = HTTPServer()
         do {
-            try server.start(port: 0, handler: simpleHelloWebApp.handle)
+            if let config = config {
+                try server.start(port: 0, tls: config, handler: simpleHelloWebApp.handle)
+                httpStr = "https"
+            } else {
+                try server.start(port: 0, handler: simpleHelloWebApp.handle)
+                httpStr = "http"
+            }
+            #if os(OSX)
+                let session = URLSession(configuration: URLSessionConfiguration.default, delegate: self, delegateQueue:OperationQueue.main) // needed for self-signed
+            #else
+                let session = URLSession(configuration: URLSessionConfiguration.default)
+            #endif
+
+            let url = URL(string: "\(httpStr)://localhost:\(server.port)/helloworld")!
+            print("Test \(#function) on port \(server.port)")
+            let dataTask = session.dataTask(with: url) { (responseBody, rawResponse, error) in
+                print("\(#function) dataTask returned")
+                let response = rawResponse as? HTTPURLResponse
+                XCTAssertNil(error, "\(error!.localizedDescription)")
+                XCTAssertNotNil(response)
+                XCTAssertNotNil(responseBody)
+                XCTAssertEqual(Int(HTTPResponseStatus.ok.code), response?.statusCode ?? 0)
+                let responseString = String(data: responseBody ?? Data(), encoding: .utf8) ?? "Nil"
+                XCTAssertEqual("Hello, World!", responseString)
+                print("\(#function) fulfilling expectation")
+                receivedExpectation.fulfill()
+            }
+            dataTask.resume()
+            self.waitForExpectations(timeout: 10) { (error) in
+                if let error = error {
+                    XCTFail("\(error)")
+                }
+            }
+            server.stop()
+            print("\(#function) stopping server")
+
         } catch {
             XCTFail("Error listening on port \(0): \(error). Use server.failed(callback:) to handle")
         }
-
-        //let session = URLSession(configuration: URLSessionConfiguration.default)
-        let session = URLSession(configuration: URLSessionConfiguration.default, delegate: self, delegateQueue:OperationQueue.main) // needed for self-signed
-        let url = URL(string: "https://localhost:\(server.port)/helloworld")!
-        print("Test \(#function) on port \(server.port)")
-        let dataTask = session.dataTask(with: url) { (responseBody, rawResponse, error) in
-            print("\(#function) dataTask returned")
-            let response = rawResponse as? HTTPURLResponse
-            XCTAssertNil(error, "\(error!.localizedDescription)")
-            XCTAssertNotNil(response)
-            XCTAssertNotNil(responseBody)
-            XCTAssertEqual(Int(HTTPResponseStatus.ok.code), response?.statusCode ?? 0)
-            let responseString = String(data: responseBody ?? Data(), encoding: .utf8) ?? "Nil"
-            XCTAssertEqual("Hello, World!", responseString)
-            print("\(#function) fulfilling expectation")
-            receivedExpectation.fulfill()
-        }
-        dataTask.resume()
-        self.waitForExpectations(timeout: 10) { (error) in
-            if let error = error {
-                XCTFail("\(error)")
-            }
-        }
-        server.stop()
-        print("\(#function) stopping server")
     }
 
+    func testRequestEchoEndToEndSecure() {
+        let config = createCASignedTLSConfig()
+        testRequestEchoEndToEndInternal(config: config)
+    }
+    
     func testRequestEchoEndToEnd() {
+        testRequestEchoEndToEndInternal()
+    }
+    
+    func testRequestEchoEndToEndInternal(config: TLSConfiguration? = nil) {
+        
         let receivedExpectation = self.expectation(description: "Received web response \(#function)")
+        let httpStr: String
         let testString="This is a test"
 
         let server = HTTPServer()
         do {
-            try server.start(port: 0, handler: EchoHandler().handle)
-            //let session = URLSession(configuration: URLSessionConfiguration.default)
-            let session = URLSession(configuration: URLSessionConfiguration.default, delegate: self, delegateQueue:OperationQueue.main) // needed for self-signed
-            let url = URL(string: "https://localhost:\(server.port)/echo")!
+            if let config = config {
+                try server.start(port: 0, tls: config, handler: EchoHandler().handle)
+                httpStr = "https"
+            } else {
+                try server.start(port: 0, handler: EchoHandler().handle)
+                httpStr = "http"
+            }
+
+            #if os(OSX)
+                let session = URLSession(configuration: URLSessionConfiguration.default, delegate: self, delegateQueue:OperationQueue.main) // needed for self-signed
+            #else
+                let session = URLSession(configuration: URLSessionConfiguration.default)
+            #endif
+
+            let url = URL(string: "\(httpStr)://localhost:\(server.port)/echo")!
             print("Test \(#function) on port \(server.port)")
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
@@ -204,20 +288,41 @@ class ServerTests: XCTestCase, URLSessionDelegate {
         }
     }
 
+    func testRequestKeepAliveEchoEndToEndSecure() {
+        let config = createCASignedTLSConfig()
+        testRequestKeepAliveEchoEndToEndInternal(config: config)
+    }
+    
     func testRequestKeepAliveEchoEndToEnd() {
+        testRequestKeepAliveEchoEndToEndInternal()
+    }
+    
+    func testRequestKeepAliveEchoEndToEndInternal(config: TLSConfiguration? = nil) {
+        
         let receivedExpectation1 = self.expectation(description: "Received web response 1: \(#function)")
         let receivedExpectation2 = self.expectation(description: "Received web response 2: \(#function)")
         let receivedExpectation3 = self.expectation(description: "Received web response 3: \(#function)")
         let testString1="This is a test"
         let testString2="This is a test, too"
         let testString3="This is also a test"
+        let httpStr: String
 
         let server = HTTPServer()
         do {
-            try server.start(port: 0, handler: EchoHandler().handle)
-            //let session = URLSession(configuration: URLSessionConfiguration.default)
-            let session = URLSession(configuration: URLSessionConfiguration.default, delegate: self, delegateQueue:OperationQueue.main) // needed for self-signed
-            let url = URL(string: "https://localhost:\(server.port)/echo")!
+            if let config = config {
+                try server.start(port: 0, tls: config, handler: EchoHandler().handle)
+                httpStr = "https"
+            } else {
+                try server.start(port: 0, handler: EchoHandler().handle)
+                httpStr = "http"
+            }
+            #if os(OSX)
+                let session = URLSession(configuration: URLSessionConfiguration.default, delegate: self, delegateQueue:OperationQueue.main) // needed for self-signed
+            #else
+                let session = URLSession(configuration: URLSessionConfiguration.default)
+            #endif
+            
+            let url = URL(string: "\(httpStr)://localhost:\(server.port)/echo")!
             print("Test \(#function) on port \(server.port)")
             var request1 = URLRequest(url: url)
             request1.httpMethod = "POST"
@@ -292,20 +397,42 @@ class ServerTests: XCTestCase, URLSessionDelegate {
         }
     }
     
+    func testMultipleRequestWithoutKeepAliveEchoEndToEndSecure() {
+        let config = createCASignedTLSConfig()
+        testMultipleRequestWithoutKeepAliveEchoEndToEndInternal(config: config)
+    }
+    
     func testMultipleRequestWithoutKeepAliveEchoEndToEnd() {
+        testMultipleRequestWithoutKeepAliveEchoEndToEndInternal()
+    }
+    
+    func testMultipleRequestWithoutKeepAliveEchoEndToEndInternal(config: TLSConfiguration? = nil) {
         let receivedExpectation1 = self.expectation(description: "Received web response 1: \(#function)")
         let receivedExpectation2 = self.expectation(description: "Received web response 2: \(#function)")
         let receivedExpectation3 = self.expectation(description: "Received web response 3: \(#function)")
         let testString1="This is a test"
         let testString2="This is a test, too"
         let testString3="This is also a test"
+        let httpStr: String
         
         let server = HTTPServer()
         do {
-            try server.start(port: 0, handler: EchoHandler().handle)
-            //let session = URLSession(configuration: URLSessionConfiguration.default)
-            let session = URLSession(configuration: URLSessionConfiguration.default, delegate: self, delegateQueue:OperationQueue.main) // needed for self-signed
-            let url1 = URL(string: "https://localhost:\(server.port)/echo")!
+            if let config = config {
+                try server.start(port: 0, tls: config, handler: EchoHandler().handle)
+                httpStr = "https"
+                
+            } else {
+                try server.start(port: 0, handler: EchoHandler().handle)
+                httpStr = "http"
+            }
+            
+            #if os(OSX)
+                let session = URLSession(configuration: URLSessionConfiguration.default, delegate: self, delegateQueue:OperationQueue.main) // needed for self-signed
+            #else
+                let session = URLSession(configuration: URLSessionConfiguration.default)
+            #endif
+
+            let url1 = URL(string: "\(httpStr)://localhost:\(server.port)/echo")!
             print("Test \(#function) on port \(server.port)")
             var request1 = URLRequest(url: url1)
             request1.httpMethod = "POST"
@@ -325,7 +452,7 @@ class ServerTests: XCTestCase, URLSessionDelegate {
                 XCTAssertEqual(server.connectionCount, 1)
                 XCTAssertEqual(Int(HTTPResponseStatus.ok.code), response?.statusCode ?? 0)
                 XCTAssertEqual(testString1, String(data: responseBody ?? Data(), encoding: .utf8) ?? "Nil")
-                let url2 = URL(string: "https://127.0.0.1:\(server.port)/echo")!
+                let url2 = URL(string: "\(httpStr)://127.0.0.1:\(server.port)/echo")!
                 var request2 = URLRequest(url: url2)
                 request2.httpMethod = "POST"
                 request2.httpBody = testString2.data(using: .utf8)
@@ -344,7 +471,7 @@ class ServerTests: XCTestCase, URLSessionDelegate {
                     XCTAssertNotNil(responseBody2)
                     XCTAssertEqual(Int(HTTPResponseStatus.ok.code), response2?.statusCode ?? 0)
                     XCTAssertEqual(testString2, String(data: responseBody2 ?? Data(), encoding: .utf8) ?? "Nil")
-                    let url3 = URL(string: "https://0.0.0.0:\(server.port)/echo")!
+                    let url3 = URL(string: "\(httpStr)://0.0.0.0:\(server.port)/echo")!
                     var request3 = URLRequest(url: url3)
                     request3.httpMethod = "POST"
                     request3.httpBody = testString3.data(using: .utf8)
@@ -384,10 +511,20 @@ class ServerTests: XCTestCase, URLSessionDelegate {
         }
     }
 
-
+    func testRequestLargeEchoEndToEndSecure() {
+        let config = createCASignedTLSConfig()
+        testRequestLargeEchoEndToEndInternal(config: config)
+    }
+    
     func testRequestLargeEchoEndToEnd() {
+        testRequestLargeEchoEndToEndInternal()
+    }
+    
+    func testRequestLargeEchoEndToEndInternal(config: TLSConfiguration? = nil) {
+        
         let receivedExpectation = self.expectation(description: "Received web response \(#function)")
-
+        let httpStr: String
+        
         // Get a file we know exists
         let executableURL = URL(fileURLWithPath: CommandLine.arguments[0])
         let testExecutableData: Data
@@ -411,10 +548,21 @@ class ServerTests: XCTestCase, URLSessionDelegate {
 
         let server = HTTPServer()
         do {
-            try server.start(port: 0, handler: EchoHandler().handle)
-            //let session = URLSession(configuration: URLSessionConfiguration.default)
-            let session = URLSession(configuration: URLSessionConfiguration.default, delegate: self, delegateQueue:OperationQueue.main) // needed for self-signed
-            let url = URL(string: "https://localhost:\(server.port)/echo")!
+            if let config = config {
+                try server.start(port: 0, tls: config, handler: EchoHandler().handle)
+                httpStr = "https"
+                
+            } else {
+                try server.start(port: 0, handler: EchoHandler().handle)
+                httpStr = "http"
+            }
+            
+            #if os(OSX)
+                let session = URLSession(configuration: URLSessionConfiguration.default, delegate: self, delegateQueue:OperationQueue.main) // needed for self-signed
+            #else
+                let session = URLSession(configuration: URLSessionConfiguration.default)
+            #endif
+            let url = URL(string: "\(httpStr)://localhost:\(server.port)/echo")!
             print("Test \(#function) on port \(server.port)")
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
@@ -440,6 +588,53 @@ class ServerTests: XCTestCase, URLSessionDelegate {
         }
     }
 
+    private func createSelfSignedTLSConfig() -> TLSConfiguration {
+        #if os(Linux)
+            // FIXME: add self-signed certs
+            let myCAPath = URL(fileURLWithPath: #file).appendingPathComponent("../../Certs/REMOVErootchain.pem").standardized
+            let myCertPath = URL(fileURLWithPath: #file).appendingPathComponent("../../Certs/REMOVEcert.pem").standardized
+            let myKeyPath = URL(fileURLWithPath: #file).appendingPathComponent("../../Certs/REMOVE.key").standardized
+            let config = TLSConfiguration(withCACertificateFilePath: myCAPath.path, usingCertificateFile: myCertPath.path, withKeyFile: myKeyPath.path, usingSelfSignedCerts: false)
+            
+        #else
+            let myP12 = URL(fileURLWithPath: #file).appendingPathComponent("../../../Certs/Self-Signed/cert.pfx").standardized
+            let myPassword = "sw!ft!sC00l"
+            let config = TLSConfiguration(withChainFilePath: myP12.path, withPassword: myPassword, usingSelfSignedCerts: true)
+            
+            print("myP12 =  \(myP12)")
+            
+        #endif
+        
+        return config
+    }
+
+    private func createCASignedTLSConfig() -> TLSConfiguration {
+        #if os(Linux)
+
+            let myCAPath = URL(fileURLWithPath: #file).appendingPathComponent("../../Certs/REMOVErootchain.pem").standardized
+            let myCertPath = URL(fileURLWithPath: #file).appendingPathComponent("../../Certs/REMOVEcert.pem").standardized
+            let myKeyPath = URL(fileURLWithPath: #file).appendingPathComponent("../../Certs/REMOVE.key").standardized
+            let config = TLSConfiguration(withCACertificateFilePath: myCAPath.path, usingCertificateFile: myCertPath.path, withKeyFile: myKeyPath.path, usingSelfSignedCerts: false)
+        #else
+             let myP12 = URL(fileURLWithPath: #file).appendingPathComponent("../../../Certs/REMOVE.pfx").standardized
+             let myPassword = "password"
+             let config = TLSConfiguration(withChainFilePath: myP12.path, withPassword: myPassword, usingSelfSignedCerts: false)
+        #endif
+        
+        return config
+    }
+    #if os(OSX)
+    static var allSecureTests = [
+        ("testOkEndToEndSecure", testOkEndToEndSecure),
+        ("testHelloEndToEndSecure", testHelloEndToEndSecure),
+        ("testSimpleHelloEndToEndSecure", testSimpleHelloEndToEndSecure),
+        ("testRequestEchoEndToEndSecure", testRequestEchoEndToEndSecure),
+        ("testRequestKeepAliveEchoEndToEndSecure", testRequestKeepAliveEchoEndToEndSecure),
+        ("testRequestLargeEchoEndToEndSecure", testRequestLargeEchoEndToEndSecure),
+        ]
+    #endif
+
+    
     static var allTests = [
         ("testEcho", testEcho),
         ("testHello", testHello),
@@ -451,5 +646,15 @@ class ServerTests: XCTestCase, URLSessionDelegate {
         ("testRequestEchoEndToEnd", testRequestEchoEndToEnd),
         ("testRequestKeepAliveEchoEndToEnd", testRequestKeepAliveEchoEndToEnd),
         ("testRequestLargeEchoEndToEnd", testRequestLargeEchoEndToEnd),
-    ]
+        ]
 }
+
+#if os(OSX)
+extension ServerTests: URLSessionDelegate {
+        func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+            completionHandler(URLSession.AuthChallengeDisposition.useCredential, URLCredential(trust: challenge.protectionSpace.serverTrust!) )
+    }
+}
+#endif
+
+
