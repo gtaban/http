@@ -19,7 +19,7 @@ public class StreamingParser: HTTPResponseWriter {
     /// Time to leave socket open waiting for next request to start
     public static let keepAliveTimeout: TimeInterval = 5
 
-    /// Flag to track if the client wants to send multiple requests on the same TCP connection
+    /// Flag to track if the client wants to send consecutive requests on the same TCP connection
     var clientRequestedKeepAlive = false
 
     /// Tracks when socket should be closed. Needs to have a lock, since it's updated often
@@ -42,12 +42,7 @@ public class StreamingParser: HTTPResponseWriter {
         }
     }
 
-    /// Theoretical limit of how many open requests we can have. Used in Keep-Alive Header
-    let maxRequests = 100
-
-    /// Optional delegate that can tell us how many connections are in-flight so we can set the Keep-Alive header
-    ///  to the correct number of available connections. If not present, the client will not be limited in number of 
-    ///  connections that can be made simultaneously
+    /// Optional delegate that can tell us how many connections are in-flight.
     public weak var connectionCounter: CurrentConnectionCounting?
 
     /// Holds the bytes that come from the CHTTPParser until we have enough of them to do something with it
@@ -63,6 +58,26 @@ public class StreamingParser: HTTPResponseWriter {
     //Note: we want this to be strong so it holds onto the connector until it's explicitly cleared
     /// Protocol that we use to send data (and status info) back to the Network layer
     public var parserConnector: ParserConnecting?
+
+    ///Flag to track whether our handler has told us not to call it anymore
+    private let _shouldStopProcessingBodyLock = DispatchSemaphore(value: 1)
+    private var _shouldStopProcessingBody: Bool = false
+    private var shouldStopProcessingBody: Bool {
+        get {
+            _shouldStopProcessingBodyLock.wait()
+            defer {
+                _shouldStopProcessingBodyLock.signal()
+            }
+            return _shouldStopProcessingBody
+        }
+        set {
+            _shouldStopProcessingBodyLock.wait()
+            defer {
+                _shouldStopProcessingBodyLock.signal()
+            }
+            _shouldStopProcessingBody = newValue
+        }
+    }
 
     var lastCallBack = CallbackRecord.idle
     var lastHeaderName: String?
@@ -228,10 +243,10 @@ public class StreamingParser: HTTPResponseWriter {
     func messageCompleted() -> Int32 {
         let didChangeState = processCurrentCallback(.messageCompleted)
         if let chunkHandler = self.httpBodyProcessingCallback, didChangeState {
-            var stop = false
+            var dummy = false //We're sending `.end`, which means processing is stopping anyway, so the bool here is pointless
             switch chunkHandler {
             case .processBody(let handler):
-                handler(.end, &stop)
+                handler(.end, &dummy)
             case .discardBody:
                 done()
             }
@@ -284,21 +299,29 @@ public class StreamingParser: HTTPResponseWriter {
     func bodyReceived(data: UnsafePointer<Int8>?, length: Int) -> Int32 {
         processCurrentCallback(.bodyReceived)
         guard let data = data else { return 0 }
+        if shouldStopProcessingBody {
+            return 0
+        }
         data.withMemoryRebound(to: UInt8.self, capacity: length) { (ptr) -> Void in
-            let buff = UnsafeBufferPointer<UInt8>(start: ptr, count: length)
+            #if swift(>=4.0)
+                let buff = UnsafeRawBufferPointer(start: ptr, count: length)
+            #else
+                let buff = UnsafeBufferPointer<UInt8>(start: ptr, count: length)
+            #endif
             let chunk = DispatchData(bytes: buff)
             if let chunkHandler = self.httpBodyProcessingCallback {
-                var stop = false
-                var finished = false
-                while !stop && !finished {
-                    switch chunkHandler {
+                switch chunkHandler {
                     case .processBody(let handler):
-                        handler(.chunk(data: chunk, finishedProcessing: {
-                            finished = true
-                        }), &stop)
+                        //OK, this sucks.  We can't access the value of the `inout` inside this block
+                        //  due to exclusivity. Which means that if we were to pass a local variable, we'd
+                        //  have to put a semaphore or something up here to wait for the block to be done before
+                        //  we could get its value and pass that on to the instance variable. So instead, we're
+                        //  just passing in a pointer to the internal ivar. But that ivar can't be modified in
+                        //  more than one place, so we have to put a semaphore around it to prevent that.
+                        _shouldStopProcessingBodyLock.wait()
+                        handler(.chunk(data: chunk, finishedProcessing: {self._shouldStopProcessingBodyLock.signal()}), &_shouldStopProcessingBody)
                     case .discardBody:
-                        finished = true
-                    }
+                        break
                 }
             }
         }
@@ -335,7 +358,7 @@ public class StreamingParser: HTTPResponseWriter {
     }
 
     public func writeHeader(status: HTTPResponseStatus, headers: HTTPHeaders, completion: @escaping (Result) -> Void) {
-        // TODO call completion()
+
         guard !headersWritten else {
             return
         }
@@ -358,7 +381,7 @@ public class StreamingParser: HTTPResponseWriter {
         // FIXME headers are US-ASCII, anything else should be encoded using [RFC5987] some lines above
         // TODO use requested encoding if specified
         if let data = header.data(using: .utf8) {
-            self.parserConnector?.queueSocketWrite(data)
+            self.parserConnector?.queueSocketWrite(data, completion: completion)
             if !isContinue {
                 headersWritten = true
             }
@@ -392,14 +415,10 @@ public class StreamingParser: HTTPResponseWriter {
 
 
         if clientRequestedKeepAlive {
-            let availableConnections = maxRequests - (self.connectionCounter?.connectionCount ?? 0)
-            if availableConnections > 0 {
-                headers[.connection] = "Keep-Alive"
-                headers[.keepAlive] = "timeout=\(Int(StreamingParser.keepAliveTimeout)), max=\(availableConnections)"
-                return
-            }
+            headers[.connection] = "Keep-Alive"
+        } else {
+            headers[.connection] = "Close"
         }
-        headers[.connection] = "Close"
     }
 
     public func writeTrailer(_ trailers: HTTPHeaders, completion: @escaping (Result) -> Void) {
@@ -433,15 +452,13 @@ public class StreamingParser: HTTPResponseWriter {
             dataToWrite = data.withUnsafeBytes { Data($0) }
         }
 
-        self.parserConnector?.queueSocketWrite(dataToWrite)
-
-        completion(.ok)
+        self.parserConnector?.queueSocketWrite(dataToWrite, completion: completion)
     }
 
     public func done(completion: @escaping (Result) -> Void) {
         if isChunked {
             let chunkTerminate = "0\r\n\r\n".data(using: .utf8)!
-            self.parserConnector?.queueSocketWrite(chunkTerminate)
+            self.parserConnector?.queueSocketWrite(chunkTerminate, completion: completion)
         }
 
         self.parsedHTTPMethod = nil
@@ -455,20 +472,16 @@ public class StreamingParser: HTTPResponseWriter {
         self.headersWritten = false
         self.httpBodyProcessingCallback = nil
         self.upgradeRequested = false
+        self.shouldStopProcessingBody = false
 
-        let closeAfter = {
-            if self.clientRequestedKeepAlive {
-                self.keepAliveUntil = Date(timeIntervalSinceNow: StreamingParser.keepAliveTimeout).timeIntervalSinceReferenceDate
-                self.parserConnector?.responseComplete()
-            } else {
-                self.parserConnector?.closeWriter()
-            }
+        //Note: This used to be passed into the completion block that `Result` used to have
+        //  But since that block was removed, we're calling it directly
+        if self.clientRequestedKeepAlive {
+            self.keepAliveUntil = Date(timeIntervalSinceNow: StreamingParser.keepAliveTimeout).timeIntervalSinceReferenceDate
+            self.parserConnector?.responseComplete()
+        } else {
+            self.parserConnector?.responseCompleteCloseWriter()
         }
-
-        // FIXME I do not understand what code written here before was meant to do
-        // If it was about delayed closure invocation then it couldn't work either
-        // Here is the equivalent code
-        closeAfter()
         completion(.ok)
     }
 
@@ -486,13 +499,16 @@ public class StreamingParser: HTTPResponseWriter {
 /// :nodoc:
 public protocol ParserConnecting: class {
     /// Send data to the network do be written to the client
-    func queueSocketWrite(_ from: Data)
+    func queueSocketWrite(_ from: Data, completion: @escaping (Result) -> Void)
 
     /// Let the network know that a response has started to avoid closing a connection during a slow write
     func responseBeginning()
 
     /// Let the network know that a response is complete, so it can be closed after timeout
     func responseComplete()
+    
+    /// Let the network know that a response is complete and we're ready to close the connection
+    func responseCompleteCloseWriter()
 
     /// Used to let the network know we're ready to close the connection
     func closeWriter()

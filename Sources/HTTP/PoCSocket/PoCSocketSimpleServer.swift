@@ -66,6 +66,7 @@ public class PoCSocketSimpleServer: CurrentConnectionCounting {
     public func start(port: Int = 0,
                       queueCount: Int = 0,
                       acceptCount: Int = 0,
+                      maxReadLength: Int = 1048576,
                       tlsConfig: TLSConfiguration? = nil,
                       handler: @escaping HTTPRequestHandler) throws {
 
@@ -91,8 +92,13 @@ public class PoCSocketSimpleServer: CurrentConnectionCounting {
         pruneSocketTimer.setEventHandler { [weak self] in
             self?.connectionListenerList.prune()
         }
-        pruneSocketTimer.scheduleRepeating(deadline: .now() + StreamingParser.keepAliveTimeout,
-                                           interval: .seconds(Int(StreamingParser.keepAliveTimeout)))
+        #if swift(>=4.0)
+            pruneSocketTimer.schedule(deadline: .now() + StreamingParser.keepAliveTimeout,
+                                     repeating: .seconds(Int(StreamingParser.keepAliveTimeout)))
+        #else
+            pruneSocketTimer.scheduleRepeating(deadline: .now() + StreamingParser.keepAliveTimeout,
+                                               interval: .seconds(Int(StreamingParser.keepAliveTimeout)))
+        #endif
         pruneSocketTimer.resume()
 
         var readQueues = [DispatchQueue]()
@@ -123,7 +129,7 @@ public class PoCSocketSimpleServer: CurrentConnectionCounting {
                     let streamingParser = StreamingParser(handler: handler, connectionCounter: self)
                     let readQueue = readQueues[listenerCount % self.queueMax]
                     let writeQueue = writeQueues[listenerCount % self.queueMax]
-                    let listener = PoCSocketConnectionListener(socket: clientSocket, parser: streamingParser, readQueue:readQueue, writeQueue: writeQueue)
+                    let listener = PoCSocketConnectionListener(socket: clientSocket, parser: streamingParser, readQueue:readQueue, writeQueue: writeQueue, maxReadLength: maxReadLength)
                     listenerCount += 1
                     acceptSemaphore.wait()
                     acceptQueue.async { [weak listener] in
