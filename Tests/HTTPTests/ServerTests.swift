@@ -547,7 +547,7 @@ class ServerTests: XCTestCase {
         let server = PoCSocketSimpleServer()
         do {
             if let config = config {
-                try server.start(port: 0, maxReadLength: chunkSize, tls: config, handler: EchoHandler().handle)
+                try server.start(port: 0, maxReadLength: chunkSize, tlsConfig: config, handler: EchoHandler().handle)
                 httpStr = "https"
                 
             } else {
