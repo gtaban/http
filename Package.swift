@@ -14,8 +14,8 @@ let package = Package(
     dependencies: [
         // Dependencies declare other packages that this package depends on.
         // .package(url: /* package url */, from: "1.0.0"),
-        .Package(url: "https://github.com/gtaban/security.git", majorVersion: 0),
-        .Package(url: "https://github.com/gtaban/TLSService.git", majorVersion: 0),
+        .package(url: "https://github.com/gtaban/security.git", from: "0.0.0"),
+        .package(url: "https://github.com/gtaban/TLSService.git", from: "0.20.0"),
     ],
     targets: [
         // Targets are the basic building blocks of a package. A target can define a module or a test suite.
@@ -25,7 +25,7 @@ let package = Package(
             dependencies: []),
         .target(
             name: "HTTP",
-            dependencies: ["CHTTPParser"]),
+            dependencies: ["CHTTPParser", "ServerSecurity", "TLSService"]),
         .testTarget(
             name: "HTTPTests",
             dependencies: ["HTTP"]),
