@@ -711,8 +711,9 @@ class ServerTests: XCTestCase {
 
     private func createSelfSignedTLSConfig() -> TLSConfiguration {
         #if os(Linux)
-            let myCertPath = URL(fileURLWithPath: #file).appendingPathComponent("../../Certs/Self-Signed/cert.pfx").standardized
-            let myKeyPath = URL(fileURLWithPath: #file).appendingPathComponent("../../Certs/Self-Signed/key.pfx").standardized
+            let myCAPath = URL(fileURLWithPath: #file).appendingPathComponent("../../Certs/Self-Signed/chain.pem").standardized
+            let myCertPath = URL(fileURLWithPath: #file).appendingPathComponent("../../Certs/Self-Signed/cert.pem").standardized
+            let myKeyPath = URL(fileURLWithPath: #file).appendingPathComponent("../../Certs/Self-Signed/key.pem").standardized
             let config = TLSConfiguration(withCACertificateFilePath: myCAPath.path, usingCertificateFile: myCertPath.path, withKeyFile: myKeyPath.path, usingSelfSignedCerts: true)
         #else
             let myP12 = URL(fileURLWithPath: #file).appendingPathComponent("../../../Certs/Self-Signed/cert.pfx").standardized
