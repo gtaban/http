@@ -81,12 +81,10 @@ public class PoCSocketSimpleServer: CurrentConnectionCounting {
         }
         // Setting up TLS...
         if let tlsConfig = tlsConfig {
-            print("Setup of config")
             let security = try TLSService(usingConfiguration: tlsConfig)
             self.serverSocket.TLSdelegate = security
         }
 
-        print("Secure connection = \(self.serverSocket.isConnectionSecure)")
         try self.serverSocket.bindAndListen(on: port)
 
         pruneSocketTimer.setEventHandler { [weak self] in
@@ -125,7 +123,6 @@ public class PoCSocketSimpleServer: CurrentConnectionCounting {
                         }
                         break
                     }
-                    print("acceptedClientSocket done")
                     let streamingParser = StreamingParser(handler: handler, connectionCounter: self)
                     let readQueue = readQueues[listenerCount % self.queueMax]
                     let writeQueue = writeQueues[listenerCount % self.queueMax]
@@ -137,7 +134,6 @@ public class PoCSocketSimpleServer: CurrentConnectionCounting {
                         acceptSemaphore.signal()
                     }
                     self.connectionListenerList.add(listener)
-                    print("start done")
 
                 } catch let error {
                     print("Error accepting client connection: \(error)")

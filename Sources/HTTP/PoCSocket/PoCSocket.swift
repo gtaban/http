@@ -240,9 +240,8 @@ internal class PoCSocket: ConnectionDelegate {
         
         // Initialize delegate
         if isConnectionSecure {
-            print("TLS create server")
             try TLSdelegate?.didCreateServer()
-        } else {print("NOT SECURE")}
+        }
 
         var on: Int32 = 1
         // Allow address reuse

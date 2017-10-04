@@ -62,6 +62,7 @@ class ServerTests: XCTestCase {
     }
 
     func testOkEndToEndSecure() {
+        //let config = createSelfSignedTLSConfig()
         let config = createCASignedTLSConfig()
         testOkEndToEndInternal(config: config)
     }
@@ -113,7 +114,7 @@ class ServerTests: XCTestCase {
     }
 
     func testHelloEndToEndSecure() {
-        let config = createCASignedTLSConfig()
+        let config = createSelfSignedTLSConfig()
         testHelloEndToEndInternal(config: config)
     }
     
@@ -166,7 +167,7 @@ class ServerTests: XCTestCase {
     }
 
     func testSimpleHelloEndToEndSecure() {
-        let config = createCASignedTLSConfig()
+        let config = createSelfSignedTLSConfig()
         testSimpleHelloEndToEndInternal(config: config)
     }
     
@@ -231,7 +232,7 @@ class ServerTests: XCTestCase {
     }
 
     func testRequestEchoEndToEndSecure() {
-        let config = createCASignedTLSConfig()
+        let config = createSelfSignedTLSConfig()
         testRequestEchoEndToEndInternal(config: config)
     }
     
@@ -290,7 +291,7 @@ class ServerTests: XCTestCase {
     }
 
     func testRequestKeepAliveEchoEndToEndSecure() {
-        let config = createCASignedTLSConfig()
+        let config = createSelfSignedTLSConfig()
         testRequestKeepAliveEchoEndToEndInternal(config: config)
     }
     
@@ -393,7 +394,7 @@ class ServerTests: XCTestCase {
     }
     
     func testMultipleRequestWithoutKeepAliveEchoEndToEndSecure() {
-        let config = createCASignedTLSConfig()
+        let config = createSelfSignedTLSConfig()
         testMultipleRequestWithoutKeepAliveEchoEndToEndInternal(config: config)
     }
     
@@ -507,7 +508,7 @@ class ServerTests: XCTestCase {
     }
 
     func testRequestLargeEchoEndToEndSecure() {
-        let config = createCASignedTLSConfig()
+        let config = createSelfSignedTLSConfig()
         testRequestLargeEchoEndToEndInternal(config: config)
     }
     
@@ -586,10 +587,22 @@ class ServerTests: XCTestCase {
         }
     }
     
+    func testRequestLargePostHelloWorldSecure() {
+        //let config = createSelfSignedTLSConfig()
+        let config = createCASignedTLSConfig()
+        testRequestLargePostHelloWorldInternal(config: config)
+    }
+    
     func testRequestLargePostHelloWorld() {
-        let receivedExpectation = self.expectation(description: "Received web response \(#function)")
+        testRequestLargePostHelloWorldInternal()
+    }
+    
+    func testRequestLargePostHelloWorldInternal(config: TLSConfiguration? = nil) {
         
-        //Use a small chunk size to make sure that we stop after one HTTPBodyHandler call
+        let receivedExpectation = self.expectation(description: "Received web response \(#function)")
+        let httpStr: String
+
+        // Use a small chunk size to make sure that we stop after one HTTPBodyHandler call
         let chunkSize = 1024
         
         // Get a file we know exists
@@ -611,10 +624,25 @@ class ServerTests: XCTestCase {
         let server = PoCSocketSimpleServer()
         do {
             let testHandler = AbortAndSendHelloHandler()
-            try server.start(port: 0, maxReadLength: chunkSize, handler: testHandler.handle)
-            let session = URLSession(configuration: URLSessionConfiguration.default)
-            let url = URL(string: "http://localhost:\(server.port)/echo")!
+            
+            if let config = config {
+                try server.start(port: 0, maxReadLength: chunkSize, tlsConfig: config, handler: testHandler.handle)
+                httpStr = "https"
+                
+            } else {
+                try server.start(port: 0, maxReadLength: chunkSize, handler: testHandler.handle)
+                httpStr = "http"
+            }
+            
+            #if os(OSX)
+                let session = URLSession(configuration: URLSessionConfiguration.default, delegate: self, delegateQueue:OperationQueue.main) // needed for self-signed
+            #else
+                let session = URLSession(configuration: URLSessionConfiguration.default)
+            #endif
+            
             print("Test \(#function) on port \(server.port)")
+            
+            let url = URL(string: "\(httpStr)://localhost:\(server.port)/echo")!
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             let uploadTask = session.uploadTask(with: request, fromFile: executableURL) { (responseBody, rawResponse, error) in
@@ -683,19 +711,13 @@ class ServerTests: XCTestCase {
 
     private func createSelfSignedTLSConfig() -> TLSConfiguration {
         #if os(Linux)
-            // FIXME: add self-signed certs
-            let myCAPath = URL(fileURLWithPath: #file).appendingPathComponent("../../Certs/REMOVErootchain.pem").standardized
-            let myCertPath = URL(fileURLWithPath: #file).appendingPathComponent("../../Certs/REMOVEcert.pem").standardized
-            let myKeyPath = URL(fileURLWithPath: #file).appendingPathComponent("../../Certs/REMOVE.key").standardized
-            let config = TLSConfiguration(withCACertificateFilePath: myCAPath.path, usingCertificateFile: myCertPath.path, withKeyFile: myKeyPath.path, usingSelfSignedCerts: false)
-            
+            let myCertPath = URL(fileURLWithPath: #file).appendingPathComponent("../../Certs/Self-Signed/cert.pfx").standardized
+            let myKeyPath = URL(fileURLWithPath: #file).appendingPathComponent("../../Certs/Self-Signed/key.pfx").standardized
+            let config = TLSConfiguration(withCACertificateFilePath: myCAPath.path, usingCertificateFile: myCertPath.path, withKeyFile: myKeyPath.path, usingSelfSignedCerts: true)
         #else
             let myP12 = URL(fileURLWithPath: #file).appendingPathComponent("../../../Certs/Self-Signed/cert.pfx").standardized
             let myPassword = "sw!ft!sC00l"
             let config = TLSConfiguration(withChainFilePath: myP12.path, withPassword: myPassword, usingSelfSignedCerts: true)
-            
-            print("myP12 =  \(myP12)")
-            
         #endif
         
         return config
@@ -704,12 +726,12 @@ class ServerTests: XCTestCase {
     private func createCASignedTLSConfig() -> TLSConfiguration {
         #if os(Linux)
 
-            let myCAPath = URL(fileURLWithPath: #file).appendingPathComponent("../../Certs/REMOVErootchain.pem").standardized
-            let myCertPath = URL(fileURLWithPath: #file).appendingPathComponent("../../Certs/REMOVEcert.pem").standardized
-            let myKeyPath = URL(fileURLWithPath: #file).appendingPathComponent("../../Certs/REMOVE.key").standardized
+            let myCAPath = URL(fileURLWithPath: #file).appendingPathComponent("../../Certs/letsEncryptCerts/chain.pem").standardized
+            let myCertPath = URL(fileURLWithPath: #file).appendingPathComponent("../../Certs/letsEncryptCerts/cert.pem").standardized
+            let myKeyPath = URL(fileURLWithPath: #file).appendingPathComponent("../../Certs/letsEncryptCerts/key.pem").standardized
             let config = TLSConfiguration(withCACertificateFilePath: myCAPath.path, usingCertificateFile: myCertPath.path, withKeyFile: myKeyPath.path, usingSelfSignedCerts: false)
         #else
-             let myP12 = URL(fileURLWithPath: #file).appendingPathComponent("../../../Certs/REMOVE.pfx").standardized
+             let myP12 = URL(fileURLWithPath: #file).appendingPathComponent("../../../Certs/letsEncryptCerts/cert.pfx").standardized
              let myPassword = "password"
              let config = TLSConfiguration(withChainFilePath: myP12.path, withPassword: myPassword, usingSelfSignedCerts: false)
         #endif
@@ -741,6 +763,13 @@ class ServerTests: XCTestCase {
         ("testRequestLargeEchoEndToEnd", testRequestLargeEchoEndToEnd),
         ("testExplicitCloseConnections", testExplicitCloseConnections),
         ("testRequestLargePostHelloWorld", testRequestLargePostHelloWorld),
+        ("testOkEndToEndSecure", testOkEndToEndSecure),
+        ("testHelloEndToEndSecure", testHelloEndToEndSecure),
+        ("testSimpleHelloEndToEndSecure", testSimpleHelloEndToEndSecure),
+        ("testRequestEchoEndToEndSecure", testRequestEchoEndToEndSecure),
+        ("testRequestKeepAliveEchoEndToEndSecure", testRequestKeepAliveEchoEndToEndSecure),
+        ("testRequestLargeEchoEndToEndSecure", testRequestLargeEchoEndToEndSecure),
+        ("testRequestLargePostHelloWorldSecure", testRequestLargePostHelloWorldSecure),
     ]
 }
 

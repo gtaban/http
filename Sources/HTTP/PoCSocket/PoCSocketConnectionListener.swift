@@ -221,20 +221,35 @@ public class PoCSocketConnectionListener: ParserConnecting {
                 if strongSelf.socket?.socketfd ?? -1 > 0 {
                     var maxLength: Int = Int(strongSelf.readerSource?.data ?? 0)
                     if (maxLength > strongSelf.maxReadLength) || (maxLength <= 0) {
-                            maxLength = strongSelf.maxReadLength
+                        maxLength = strongSelf.maxReadLength
                     }
-                    var readBuffer: UnsafeMutablePointer<Int8> = UnsafeMutablePointer<Int8>.allocate(capacity: maxLength)
-                    length = try strongSelf.socket?.socketRead(into: &readBuffer, maxLength:maxLength) ?? -1
-                    if length > 0 {
-                        self?.responseCompleted = false
-                        
-                        let data = Data(bytes: readBuffer, count: length)
-                        let numberParsed = strongSelf.parser?.readStream(data:data) ?? 0
-                        
-                        if numberParsed != data.count {
-                            print("Error: wrong number of bytes consumed by parser (\(numberParsed) instead of \(data.count)")
+                    var bytesRemainToBeRead = maxLength
+
+                    repeat {
+                        if (maxLength > bytesRemainToBeRead) {
+                            maxLength = bytesRemainToBeRead
                         }
-                    }
+                        var readBuffer: UnsafeMutablePointer<Int8> = UnsafeMutablePointer<Int8>.allocate(capacity: maxLength)
+                        length = try strongSelf.socket?.socketRead(into: &readBuffer, maxLength:maxLength) ?? -1
+                        if length > 0 {
+                            self?.responseCompleted = false
+                            
+                            let data = Data(bytes: readBuffer, count: length)
+                            let numberParsed = strongSelf.parser?.readStream(data:data) ?? 0
+                            
+                            if numberParsed != data.count {
+                                print("Error: wrong number of bytes consumed by parser (\(numberParsed) instead of \(data.count)")
+                            }
+                        }
+                        
+                        // a TLS record is first read in and decrypted and then buffered.
+                        // bytesRemainToBeRead will store the number of bytes buffered by SSL layer
+                        bytesRemainToBeRead = try strongSelf.socket?.TLSdelegate?.getPendingBytes() ?? -1
+                        print("bytesRemainToBeRead = \(bytesRemainToBeRead) ")
+                        
+                    } while ( bytesRemainToBeRead > 0 )
+                    
+                    
                 } else {
                     print("bad socket FD while reading")
                     length = -1
