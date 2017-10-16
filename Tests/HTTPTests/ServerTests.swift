@@ -468,7 +468,12 @@ class ServerTests: XCTestCase {
         let config = createSelfSignedTLSConfig()
         testMultipleRequestWithoutKeepAliveEchoEndToEndInternal(tlsParams: TLSParams(config: config, selfsigned: true))
     }
-    
+
+    func testMultipleRequestWithoutKeepAliveEchoEndToEndCASecure() {
+        let config = createCASignedTLSConfig()
+        testMultipleRequestWithoutKeepAliveEchoEndToEndInternal(tlsParams: TLSParams(config: config, selfsigned: false))
+    }
+
     func testMultipleRequestWithoutKeepAliveEchoEndToEnd() {
         testMultipleRequestWithoutKeepAliveEchoEndToEndInternal()
     }
@@ -503,8 +508,8 @@ class ServerTests: XCTestCase {
                 } else {
                     session = URLSession(configuration: URLSessionConfiguration.default)
                     urlStr1 = "ssl.gelareh.xyz"
-                    urlStr2 = "ssl.gelareh.xyz"
-                    urlStr3 = "ssl.gelareh.xyz"
+                    urlStr2 = "ssl1.gelareh.xyz"
+                    urlStr3 = "ssl2.gelareh.xyz"
                 }
             } else {
                 try server.start(port: 0, handler: EchoHandler().handle)
@@ -836,20 +841,19 @@ class ServerTests: XCTestCase {
     private func createCASignedTLSConfig() -> TLSConfiguration {
         #if os(Linux)
 
-            let myCAPath = URL(fileURLWithPath: #file).appendingPathComponent("../../../Certs/freeSSL/chain.pem").standardized
-            let myCertPath = URL(fileURLWithPath: #file).appendingPathComponent("../../../Certs/freeSSL/cert.pem").standardized
-            let myKeyPath = URL(fileURLWithPath: #file).appendingPathComponent("../../../Certs/freeSSL/key.pem").standardized
+            let myCAPath = URL(fileURLWithPath: #file).appendingPathComponent("../../../Certs/letsEncryptCA/chain.pem").standardized
+            let myCertPath = URL(fileURLWithPath: #file).appendingPathComponent("../../../Certs/letsEncryptCA/cert.pem").standardized
+            let myKeyPath = URL(fileURLWithPath: #file).appendingPathComponent("../../../Certs/letsEncryptCA/key.pem").standardized
             let config = TLSConfiguration(withCACertificateFilePath: myCAPath.path, usingCertificateFile: myCertPath.path, withKeyFile: myKeyPath.path, usingSelfSignedCerts: false)
+//            print("myCAPath is at: \(myCAPath.absoluteString) ")
+//            print("myCertPath is at: \(myCertPath.absoluteString) ")
+//            print("myKeyPath is at: \(myKeyPath.absoluteString) ")
             
-            print("myCAPath is at: \(myCAPath.absoluteString) ")
-            print("myCertPath is at: \(myCertPath.absoluteString) ")
-            print("myKeyPath is at: \(myKeyPath.absoluteString) ")
-
         #else
-            let myP12 = URL(fileURLWithPath: #file).appendingPathComponent("../../../Certs/freeSSL/cert.pfx").standardized
+            let myP12 = URL(fileURLWithPath: #file).appendingPathComponent("../../../Certs/letsEncryptCA/cert.pfx").standardized
             let myPassword = "password"
             let config = TLSConfiguration(withChainFilePath: myP12.path, withPassword: myPassword, usingSelfSignedCerts: false)
-            print("myCertPath is at: \(myP12.absoluteString) ")
+//            print("myCertPath is at: \(myP12.absoluteString) ")
 
         #endif
         
@@ -869,6 +873,7 @@ class ServerTests: XCTestCase {
         ("testRequestLargeEchoEndToEnd", testRequestLargeEchoEndToEnd),
         ("testExplicitCloseConnections", testExplicitCloseConnections),
         ("testRequestLargePostHelloWorld", testRequestLargePostHelloWorld),
+        ("testMultipleRequestWithoutKeepAliveEchoEndToEnd", testMultipleRequestWithoutKeepAliveEchoEndToEnd),
         ("testOkEndToEndCASecure", testOkEndToEndCASecure),
         ("testHelloEndToEndCASecure", testHelloEndToEndCASecure),
         ("testSimpleHelloEndToEndCASecure", testSimpleHelloEndToEndCASecure),
@@ -876,6 +881,7 @@ class ServerTests: XCTestCase {
         ("testRequestKeepAliveEchoEndToEndCASecure", testRequestKeepAliveEchoEndToEndCASecure),
         ("testRequestLargeEchoEndToEndCASecure", testRequestLargeEchoEndToEndCASecure),
         ("testRequestLargePostHelloWorldCASecure", testRequestLargePostHelloWorldCASecure),
+        ("testMultipleRequestWithoutKeepAliveEchoEndToEndCASecure", testMultipleRequestWithoutKeepAliveEchoEndToEndCASecure)
     ]
 }
 
