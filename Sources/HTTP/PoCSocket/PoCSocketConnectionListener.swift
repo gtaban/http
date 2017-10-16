@@ -8,6 +8,7 @@
 
 import Foundation
 import Dispatch
+import TLSService
 
 ///:nodoc:
 public class PoCSocketConnectionListener: ParserConnecting {
@@ -244,7 +245,7 @@ public class PoCSocketConnectionListener: ParserConnecting {
                         
                         // a TLS record is first read in and decrypted and then buffered.
                         // bytesRemainToBeRead will store the number of bytes buffered by SSL layer
-                        bytesRemainToBeRead = try strongSelf.socket?.TLSdelegate?.getPendingBytes() ?? -1
+                        bytesRemainToBeRead = try (strongSelf.socket?.TLSdelegate as? TLSService)?.getPendingBytes() ?? -1
                         print("bytesRemainToBeRead = \(bytesRemainToBeRead) ")
                         
                     } while ( bytesRemainToBeRead > 0 )
