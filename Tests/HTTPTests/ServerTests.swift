@@ -873,7 +873,6 @@ class ServerTests: XCTestCase {
         ("testRequestLargeEchoEndToEnd", testRequestLargeEchoEndToEnd),
         ("testExplicitCloseConnections", testExplicitCloseConnections),
         ("testRequestLargePostHelloWorld", testRequestLargePostHelloWorld),
-        ("testMultipleRequestWithoutKeepAliveEchoEndToEnd", testMultipleRequestWithoutKeepAliveEchoEndToEnd),
         ("testOkEndToEndCASecure", testOkEndToEndCASecure),
         ("testHelloEndToEndCASecure", testHelloEndToEndCASecure),
         ("testSimpleHelloEndToEndCASecure", testSimpleHelloEndToEndCASecure),
@@ -881,7 +880,7 @@ class ServerTests: XCTestCase {
         ("testRequestKeepAliveEchoEndToEndCASecure", testRequestKeepAliveEchoEndToEndCASecure),
         ("testRequestLargeEchoEndToEndCASecure", testRequestLargeEchoEndToEndCASecure),
         ("testRequestLargePostHelloWorldCASecure", testRequestLargePostHelloWorldCASecure),
-        ("testMultipleRequestWithoutKeepAliveEchoEndToEndCASecure", testMultipleRequestWithoutKeepAliveEchoEndToEndCASecure)
+//        ("testMultipleRequestWithoutKeepAliveEchoEndToEndCASecure", testMultipleRequestWithoutKeepAliveEchoEndToEndCASecure)
     ]
 }
 
