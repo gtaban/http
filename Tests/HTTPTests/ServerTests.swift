@@ -61,38 +61,54 @@ class ServerTests: XCTestCase {
         XCTAssertEqual("Hello, World!", resolver.responseBody?.withUnsafeBytes { String(bytes: $0, encoding: .utf8) } ?? "Nil")
     }
 
-    func testOkEndToEndSecure() {
-        //let config = createSelfSignedTLSConfig()
+    func testOkEndToEndCASecure() {
         let config = createCASignedTLSConfig()
-        testOkEndToEndInternal(config: config)
+        testOkEndToEndInternal(tlsParams: TLSParams(config: config, selfsigned: false))
+    }
+
+    func testOkEndToEndSelfSignedSecure() {
+        let config = createSelfSignedTLSConfig()
+        testOkEndToEndInternal(tlsParams: TLSParams(config: config, selfsigned: true))
     }
 
     func testOkEndToEnd() {
         testOkEndToEndInternal()
     }
 
-    func testOkEndToEndInternal(config: TLSConfiguration? = nil) {
+    func testOkEndToEndInternal(tlsParams: TLSParams? = nil) {
         let receivedExpectation = self.expectation(description: "Received web response \(#function)")
         let httpStr: String
+        let urlStr: String
+        let session: URLSession
         
         let server = HTTPServer()
         do {
-            if let config = config {
-                try server.start(port: 0, tls: config, handler: OkHandler().handle)
+            if let tlsParams = tlsParams {
+                try server.start(port: 0, tls: tlsParams.config, handler: OkHandler().handle)
                 httpStr = "https"
                 
+                if tlsParams.selfsigned {
+                    #if os(OSX)
+                        session = URLSession(configuration: URLSessionConfiguration.default, delegate: self, delegateQueue:OperationQueue.main) // needed for self-signed
+                    #else
+                        // delegate in URLSession in Linux is not implemented. Using this to compile but it will fail if run on Linux.
+                        session = URLSession(configuration: URLSessionConfiguration.default)
+                    #endif
+                    urlStr = "localhost"
+                    
+                } else {
+                    session = URLSession(configuration: URLSessionConfiguration.default)
+                    urlStr = "ssl.gelareh.xyz"
+                }
             } else {
                 try server.start(port: 0, handler: OkHandler().handle)
+                session = URLSession(configuration: URLSessionConfiguration.default)
                 httpStr = "http"
+                urlStr = "localhost"
             }
-            #if os(OSX)
-                let session = URLSession(configuration: URLSessionConfiguration.default, delegate: self, delegateQueue:OperationQueue.main) // needed for self-signed
-            #else
-                let session = URLSession(configuration: URLSessionConfiguration.default)
-            #endif
-
-            let url = URL(string: "\(httpStr)://localhost:\(server.port)/")!
+            let url = URL(string: "\(httpStr)://\(urlStr):\(server.port)/")!
             print("Test \(#function) on port \(server.port)")
+            print("url = \(url.absoluteString) ")
             let dataTask = session.dataTask(with: url) { (responseBody, rawResponse, error) in
                 let response = rawResponse as? HTTPURLResponse
                 XCTAssertNil(error, "\(error!.localizedDescription)")
@@ -113,37 +129,54 @@ class ServerTests: XCTestCase {
         }
     }
 
-    func testHelloEndToEndSecure() {
-        let config = createSelfSignedTLSConfig()
-        testHelloEndToEndInternal(config: config)
+    func testHelloEndToEndCASecure() {
+        let config = createCASignedTLSConfig()
+        testHelloEndToEndInternal(tlsParams: TLSParams(config: config, selfsigned: false))
     }
-    
+
+    func testHelloEndToEndSelfSignedSecure() {
+        let config = createSelfSignedTLSConfig()
+        testHelloEndToEndInternal(tlsParams: TLSParams(config: config, selfsigned: true))
+    }
+
     func testHelloEndToEnd() {
         testHelloEndToEndInternal()
     }
     
-    func testHelloEndToEndInternal(config: TLSConfiguration? = nil) {
+    func testHelloEndToEndInternal(tlsParams: TLSParams? = nil) {
 
         let receivedExpectation = self.expectation(description: "Received web response \(#function)")
         let httpStr: String
+        let urlStr: String
+        let session: URLSession
 
         let server = HTTPServer()
         do {
-            if let config = config {
-                try server.start(port: 0, tls: config, handler: HelloWorldHandler().handle)
+            if let tlsParams = tlsParams {
+                try server.start(port: 0, tls: tlsParams.config, handler: HelloWorldHandler().handle)
                 httpStr = "https"
                 
+                if tlsParams.selfsigned {
+                    #if os(OSX)
+                        session = URLSession(configuration: URLSessionConfiguration.default, delegate: self, delegateQueue:OperationQueue.main) // needed for self-signed
+                    #else
+                        // delegate in URLSession in Linux is not implemented. Using this to compile but it will fail if run on Linux.
+                        session = URLSession(configuration: URLSessionConfiguration.default)
+                    #endif
+                    urlStr = "localhost"
+                    
+                } else {
+                    session = URLSession(configuration: URLSessionConfiguration.default)
+                    urlStr = "ssl.gelareh.xyz"
+                }
             } else {
                 try server.start(port: 0, handler: HelloWorldHandler().handle)
+                session = URLSession(configuration: URLSessionConfiguration.default)
                 httpStr = "http"
+                urlStr = "localhost"
             }
-            #if os(OSX)
-                let session = URLSession(configuration: URLSessionConfiguration.default, delegate: self, delegateQueue:OperationQueue.main) // needed for self-signed
-            #else
-                let session = URLSession(configuration: URLSessionConfiguration.default)
-            #endif
-
-            let url = URL(string: "\(httpStr)://localhost:\(server.port)/helloworld")!
+            
+            let url = URL(string: "\(httpStr)://\(urlStr):\(server.port)/helloworld")!
             print("Test \(#function) on port \(server.port)")
             let dataTask = session.dataTask(with: url) { (responseBody, rawResponse, error) in
                 let response = rawResponse as? HTTPURLResponse
@@ -166,19 +199,21 @@ class ServerTests: XCTestCase {
         }
     }
 
-    func testSimpleHelloEndToEndSecure() {
-        let config = createSelfSignedTLSConfig()
-        testSimpleHelloEndToEndInternal(config: config)
+    func testSimpleHelloEndToEndCASecure() {
+        let config = createCASignedTLSConfig()
+        testSimpleHelloEndToEndInternal(tlsParams: TLSParams(config: config, selfsigned: false))
     }
     
     func testSimpleHelloEndToEnd() {
         testSimpleHelloEndToEndInternal()
     }
     
-    func testSimpleHelloEndToEndInternal(config: TLSConfiguration? = nil) {
+    func testSimpleHelloEndToEndInternal(tlsParams: TLSParams? = nil) {
         
         let receivedExpectation = self.expectation(description: "Received web response \(#function)")
         let httpStr: String
+        let urlStr: String
+        let session: URLSession
 
         let simpleHelloWebApp = SimpleResponseCreator { (_, body) -> SimpleResponseCreator.Response in
             return SimpleResponseCreator.Response(
@@ -190,20 +225,31 @@ class ServerTests: XCTestCase {
 
         let server = HTTPServer()
         do {
-            if let config = config {
-                try server.start(port: 0, tls: config, handler: simpleHelloWebApp.handle)
+            if let tlsParams = tlsParams {
+                try server.start(port: 0, tls: tlsParams.config, handler: simpleHelloWebApp.handle)
                 httpStr = "https"
+                
+                if tlsParams.selfsigned {
+                    #if os(OSX)
+                        session = URLSession(configuration: URLSessionConfiguration.default, delegate: self, delegateQueue:OperationQueue.main) // needed for self-signed
+                    #else
+                        // delegate in URLSession in Linux is not implemented. Using this to compile but it will fail if run on Linux.
+                        session = URLSession(configuration: URLSessionConfiguration.default)
+                    #endif
+                    urlStr = "localhost"
+                    
+                } else {
+                    session = URLSession(configuration: URLSessionConfiguration.default)
+                    urlStr = "ssl.gelareh.xyz"
+                }
             } else {
                 try server.start(port: 0, handler: simpleHelloWebApp.handle)
+                session = URLSession(configuration: URLSessionConfiguration.default)
                 httpStr = "http"
+                urlStr = "localhost"
             }
-            #if os(OSX)
-                let session = URLSession(configuration: URLSessionConfiguration.default, delegate: self, delegateQueue:OperationQueue.main) // needed for self-signed
-            #else
-                let session = URLSession(configuration: URLSessionConfiguration.default)
-            #endif
-
-            let url = URL(string: "\(httpStr)://localhost:\(server.port)/helloworld")!
+            
+            let url = URL(string: "\(httpStr)://\(urlStr):\(server.port)/helloworld")!
             print("Test \(#function) on port \(server.port)")
             let dataTask = session.dataTask(with: url) { (responseBody, rawResponse, error) in
                 print("\(#function) dataTask returned")
@@ -231,38 +277,50 @@ class ServerTests: XCTestCase {
         }
     }
 
-    func testRequestEchoEndToEndSecure() {
-        let config = createSelfSignedTLSConfig()
-        testRequestEchoEndToEndInternal(config: config)
+    func testRequestEchoEndToEndCASecure() {
+        let config = createCASignedTLSConfig()
+        testRequestEchoEndToEndInternal(tlsParams: TLSParams(config: config, selfsigned: false))
     }
     
     func testRequestEchoEndToEnd() {
         testRequestEchoEndToEndInternal()
     }
     
-    func testRequestEchoEndToEndInternal(config: TLSConfiguration? = nil) {
+    func testRequestEchoEndToEndInternal(tlsParams: TLSParams? = nil) {
         
         let receivedExpectation = self.expectation(description: "Received web response \(#function)")
         let httpStr: String
+        let urlStr: String
+        let session: URLSession
         let testString="This is a test"
 
         let server = HTTPServer()
         do {
-            if let config = config {
-                try server.start(port: 0, tls: config, handler: EchoHandler().handle)
+            if let tlsParams = tlsParams {
+                try server.start(port: 0, tls: tlsParams.config, handler: EchoHandler().handle)
                 httpStr = "https"
+                
+                if tlsParams.selfsigned {
+                    #if os(OSX)
+                        session = URLSession(configuration: URLSessionConfiguration.default, delegate: self, delegateQueue:OperationQueue.main) // needed for self-signed
+                    #else
+                        // delegate in URLSession in Linux is not implemented. Using this to compile but it will fail if run on Linux.
+                        session = URLSession(configuration: URLSessionConfiguration.default)
+                    #endif
+                    urlStr = "localhost"
+                    
+                } else {
+                    session = URLSession(configuration: URLSessionConfiguration.default)
+                    urlStr = "ssl.gelareh.xyz"
+                }
             } else {
                 try server.start(port: 0, handler: EchoHandler().handle)
+                session = URLSession(configuration: URLSessionConfiguration.default)
                 httpStr = "http"
+                urlStr = "localhost"
             }
 
-            #if os(OSX)
-                let session = URLSession(configuration: URLSessionConfiguration.default, delegate: self, delegateQueue:OperationQueue.main) // needed for self-signed
-            #else
-                let session = URLSession(configuration: URLSessionConfiguration.default)
-            #endif
-
-            let url = URL(string: "\(httpStr)://localhost:\(server.port)/echo")!
+            let url = URL(string: "\(httpStr)://\(urlStr):\(server.port)/echo")!
             print("Test \(#function) on port \(server.port)")
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
@@ -290,16 +348,16 @@ class ServerTests: XCTestCase {
         }
     }
 
-    func testRequestKeepAliveEchoEndToEndSecure() {
-        let config = createSelfSignedTLSConfig()
-        testRequestKeepAliveEchoEndToEndInternal(config: config)
+    func testRequestKeepAliveEchoEndToEndCASecure() {
+        let config = createCASignedTLSConfig()
+        testRequestKeepAliveEchoEndToEndInternal(tlsParams: TLSParams(config: config, selfsigned: false))
     }
     
     func testRequestKeepAliveEchoEndToEnd() {
         testRequestKeepAliveEchoEndToEndInternal()
     }
     
-    func testRequestKeepAliveEchoEndToEndInternal(config: TLSConfiguration? = nil) {
+    func testRequestKeepAliveEchoEndToEndInternal(tlsParams: TLSParams? = nil) {
         
         let receivedExpectation1 = self.expectation(description: "Received web response 1: \(#function)")
         let receivedExpectation2 = self.expectation(description: "Received web response 2: \(#function)")
@@ -308,23 +366,36 @@ class ServerTests: XCTestCase {
         let testString2="This is a test, too"
         let testString3="This is also a test"
         let httpStr: String
+        let urlStr: String
+        let session: URLSession
 
         let server = HTTPServer()
         do {
-            if let config = config {
-                try server.start(port: 0, tls: config, handler: EchoHandler().handle)
+            if let tlsParams = tlsParams {
+                try server.start(port: 0, tls: tlsParams.config, handler: EchoHandler().handle)
                 httpStr = "https"
+                
+                if tlsParams.selfsigned {
+                    #if os(OSX)
+                        session = URLSession(configuration: URLSessionConfiguration.default, delegate: self, delegateQueue:OperationQueue.main) // needed for self-signed
+                    #else
+                        // delegate in URLSession in Linux is not implemented. Using this to compile but it will fail if run on Linux.
+                        session = URLSession(configuration: URLSessionConfiguration.default)
+                    #endif
+                    urlStr = "localhost"
+                    
+                } else {
+                    session = URLSession(configuration: URLSessionConfiguration.default)
+                    urlStr = "ssl.gelareh.xyz"
+                }
             } else {
                 try server.start(port: 0, handler: EchoHandler().handle)
+                session = URLSession(configuration: URLSessionConfiguration.default)
                 httpStr = "http"
+                urlStr = "localhost"
             }
-            #if os(OSX)
-                let session = URLSession(configuration: URLSessionConfiguration.default, delegate: self, delegateQueue:OperationQueue.main) // needed for self-signed
-            #else
-                let session = URLSession(configuration: URLSessionConfiguration.default)
-            #endif
             
-            let url = URL(string: "\(httpStr)://localhost:\(server.port)/echo")!
+            let url = URL(string: "\(httpStr)://\(urlStr):\(server.port)/echo")!
             print("Test \(#function) on port \(server.port)")
             var request1 = URLRequest(url: url)
             request1.httpMethod = "POST"
@@ -393,16 +464,16 @@ class ServerTests: XCTestCase {
         }
     }
     
-    func testMultipleRequestWithoutKeepAliveEchoEndToEndSecure() {
+    func testMultipleRequestWithoutKeepAliveEchoEndToEndSelfSignedSecure() {
         let config = createSelfSignedTLSConfig()
-        testMultipleRequestWithoutKeepAliveEchoEndToEndInternal(config: config)
+        testMultipleRequestWithoutKeepAliveEchoEndToEndInternal(tlsParams: TLSParams(config: config, selfsigned: true))
     }
     
     func testMultipleRequestWithoutKeepAliveEchoEndToEnd() {
         testMultipleRequestWithoutKeepAliveEchoEndToEndInternal()
     }
     
-    func testMultipleRequestWithoutKeepAliveEchoEndToEndInternal(config: TLSConfiguration? = nil) {
+    func testMultipleRequestWithoutKeepAliveEchoEndToEndInternal(tlsParams: TLSParams? = nil) {
         let receivedExpectation1 = self.expectation(description: "Received web response 1: \(#function)")
         let receivedExpectation2 = self.expectation(description: "Received web response 2: \(#function)")
         let receivedExpectation3 = self.expectation(description: "Received web response 3: \(#function)")
@@ -410,25 +481,41 @@ class ServerTests: XCTestCase {
         let testString2="This is a test, too"
         let testString3="This is also a test"
         let httpStr: String
-        
+        let urlStr1: String, urlStr2: String, urlStr3: String
+        let session: URLSession
+
         let server = HTTPServer()
         do {
-            if let config = config {
-                try server.start(port: 0, tls: config, handler: EchoHandler().handle)
+            if let tlsParams = tlsParams {
+                try server.start(port: 0, tls: tlsParams.config, handler: EchoHandler().handle)
                 httpStr = "https"
                 
+                if tlsParams.selfsigned {
+                    #if os(OSX)
+                        session = URLSession(configuration: URLSessionConfiguration.default, delegate: self, delegateQueue:OperationQueue.main) // needed for self-signed
+                    #else
+                        // delegate in URLSession in Linux is not implemented. Using this to compile but it will fail if run on Linux.
+                        session = URLSession(configuration: URLSessionConfiguration.default)
+                    #endif
+                    urlStr1 = "localhost"
+                    urlStr2 = "127.0.0.1"
+                    urlStr3 = "0.0.0.0"
+                } else {
+                    session = URLSession(configuration: URLSessionConfiguration.default)
+                    urlStr1 = "ssl.gelareh.xyz"
+                    urlStr2 = "ssl.gelareh.xyz"
+                    urlStr3 = "ssl.gelareh.xyz"
+                }
             } else {
                 try server.start(port: 0, handler: EchoHandler().handle)
+                session = URLSession(configuration: URLSessionConfiguration.default)
                 httpStr = "http"
+                urlStr1 = "localhost"
+                urlStr2 = "127.0.0.1"
+                urlStr3 = "0.0.0.0"
             }
             
-            #if os(OSX)
-                let session = URLSession(configuration: URLSessionConfiguration.default, delegate: self, delegateQueue:OperationQueue.main) // needed for self-signed
-            #else
-                let session = URLSession(configuration: URLSessionConfiguration.default)
-            #endif
-
-            let url1 = URL(string: "\(httpStr)://localhost:\(server.port)/echo")!
+            let url1 = URL(string: "\(httpStr)://\(urlStr1):\(server.port)/echo")!
             print("Test \(#function) on port \(server.port)")
             var request1 = URLRequest(url: url1)
             request1.httpMethod = "POST"
@@ -448,7 +535,7 @@ class ServerTests: XCTestCase {
                 XCTAssertEqual(server.connectionCount, 1)
                 XCTAssertEqual(Int(HTTPResponseStatus.ok.code), response?.statusCode ?? 0)
                 XCTAssertEqual(testString1, String(data: responseBody ?? Data(), encoding: .utf8) ?? "Nil")
-                let url2 = URL(string: "\(httpStr)://127.0.0.1:\(server.port)/echo")!
+                let url2 = URL(string: "\(httpStr)://\(urlStr2):\(server.port)/echo")!
                 var request2 = URLRequest(url: url2)
                 request2.httpMethod = "POST"
                 request2.httpBody = testString2.data(using: .utf8)
@@ -467,7 +554,7 @@ class ServerTests: XCTestCase {
                     XCTAssertNotNil(responseBody2)
                     XCTAssertEqual(Int(HTTPResponseStatus.ok.code), response2?.statusCode ?? 0)
                     XCTAssertEqual(testString2, String(data: responseBody2 ?? Data(), encoding: .utf8) ?? "Nil")
-                    let url3 = URL(string: "\(httpStr)://0.0.0.0:\(server.port)/echo")!
+                    let url3 = URL(string: "\(httpStr)://\(urlStr3):\(server.port)/echo")!
                     var request3 = URLRequest(url: url3)
                     request3.httpMethod = "POST"
                     request3.httpBody = testString3.data(using: .utf8)
@@ -507,19 +594,21 @@ class ServerTests: XCTestCase {
         }
     }
 
-    func testRequestLargeEchoEndToEndSecure() {
-        let config = createSelfSignedTLSConfig()
-        testRequestLargeEchoEndToEndInternal(config: config)
+    func testRequestLargeEchoEndToEndCASecure() {
+        let config = createCASignedTLSConfig()
+        testRequestLargeEchoEndToEndInternal(tlsParams: TLSParams(config: config, selfsigned: false))
     }
     
     func testRequestLargeEchoEndToEnd() {
         testRequestLargeEchoEndToEndInternal()
     }
     
-    func testRequestLargeEchoEndToEndInternal(config: TLSConfiguration? = nil) {
+    func testRequestLargeEchoEndToEndInternal(tlsParams: TLSParams? = nil) {
         
         let receivedExpectation = self.expectation(description: "Received web response \(#function)")
         let httpStr: String
+        let urlStr: String
+        let session: URLSession
 
         //Use a small chunk size to make sure that we're testing multiple HTTPBodyHandler calls
         let chunkSize = 1024
@@ -547,21 +636,31 @@ class ServerTests: XCTestCase {
 
         let server = PoCSocketSimpleServer()
         do {
-            if let config = config {
-                try server.start(port: 0, maxReadLength: chunkSize, tlsConfig: config, handler: EchoHandler().handle)
+            if let tlsParams = tlsParams {
+                try server.start(port: 0, maxReadLength: chunkSize, tlsConfig: tlsParams.config, handler: EchoHandler().handle)
                 httpStr = "https"
                 
+                if tlsParams.selfsigned {
+                    #if os(OSX)
+                        session = URLSession(configuration: URLSessionConfiguration.default, delegate: self, delegateQueue:OperationQueue.main) // needed for self-signed
+                    #else
+                        // delegate in URLSession in Linux is not implemented. Using this to compile but it will fail if run on Linux.
+                        session = URLSession(configuration: URLSessionConfiguration.default)
+                    #endif
+                    urlStr = "localhost"
+                    
+                } else {
+                    session = URLSession(configuration: URLSessionConfiguration.default)
+                    urlStr = "ssl.gelareh.xyz"
+                }
             } else {
                 try server.start(port: 0, maxReadLength: chunkSize, handler: EchoHandler().handle)
+                session = URLSession(configuration: URLSessionConfiguration.default)
                 httpStr = "http"
+                urlStr = "localhost"
             }
-            
-            #if os(OSX)
-                let session = URLSession(configuration: URLSessionConfiguration.default, delegate: self, delegateQueue:OperationQueue.main) // needed for self-signed
-            #else
-                let session = URLSession(configuration: URLSessionConfiguration.default)
-            #endif
-            let url = URL(string: "\(httpStr)://localhost:\(server.port)/echo")!
+
+            let url = URL(string: "\(httpStr)://\(urlStr):\(server.port)/echo")!
             print("Test \(#function) on port \(server.port)")
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
@@ -587,20 +686,21 @@ class ServerTests: XCTestCase {
         }
     }
     
-    func testRequestLargePostHelloWorldSecure() {
-        //let config = createSelfSignedTLSConfig()
+    func testRequestLargePostHelloWorldCASecure() {
         let config = createCASignedTLSConfig()
-        testRequestLargePostHelloWorldInternal(config: config)
+        testRequestLargePostHelloWorldInternal(tlsParams: TLSParams(config: config, selfsigned: false))
     }
     
     func testRequestLargePostHelloWorld() {
         testRequestLargePostHelloWorldInternal()
     }
     
-    func testRequestLargePostHelloWorldInternal(config: TLSConfiguration? = nil) {
+    func testRequestLargePostHelloWorldInternal(tlsParams: TLSParams? = nil) {
         
         let receivedExpectation = self.expectation(description: "Received web response \(#function)")
         let httpStr: String
+        let urlStr: String
+        let session: URLSession
 
         // Use a small chunk size to make sure that we stop after one HTTPBodyHandler call
         let chunkSize = 1024
@@ -625,24 +725,33 @@ class ServerTests: XCTestCase {
         do {
             let testHandler = AbortAndSendHelloHandler()
             
-            if let config = config {
-                try server.start(port: 0, maxReadLength: chunkSize, tlsConfig: config, handler: testHandler.handle)
+            if let tlsParams = tlsParams {
+                try server.start(port: 0, maxReadLength: chunkSize, tlsConfig: tlsParams.config, handler: testHandler.handle)
                 httpStr = "https"
                 
+                if tlsParams.selfsigned {
+                    #if os(OSX)
+                        session = URLSession(configuration: URLSessionConfiguration.default, delegate: self, delegateQueue:OperationQueue.main) // needed for self-signed
+                    #else
+                        // delegate in URLSession in Linux is not implemented. Using this to compile but it will fail if run on Linux.
+                        session = URLSession(configuration: URLSessionConfiguration.default)
+                    #endif
+                    urlStr = "localhost"
+                    
+                } else {
+                    session = URLSession(configuration: URLSessionConfiguration.default)
+                    urlStr = "ssl.gelareh.xyz"
+                }
             } else {
                 try server.start(port: 0, maxReadLength: chunkSize, handler: testHandler.handle)
+                session = URLSession(configuration: URLSessionConfiguration.default)
                 httpStr = "http"
+                urlStr = "localhost"
             }
-            
-            #if os(OSX)
-                let session = URLSession(configuration: URLSessionConfiguration.default, delegate: self, delegateQueue:OperationQueue.main) // needed for self-signed
-            #else
-                let session = URLSession(configuration: URLSessionConfiguration.default)
-            #endif
-            
+
             print("Test \(#function) on port \(server.port)")
             
-            let url = URL(string: "\(httpStr)://localhost:\(server.port)/echo")!
+            let url = URL(string: "\(httpStr)://\(urlStr):\(server.port)/echo")!
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             let uploadTask = session.uploadTask(with: request, fromFile: executableURL) { (responseBody, rawResponse, error) in
@@ -727,29 +836,25 @@ class ServerTests: XCTestCase {
     private func createCASignedTLSConfig() -> TLSConfiguration {
         #if os(Linux)
 
-            let myCAPath = URL(fileURLWithPath: #file).appendingPathComponent("../../Certs/letsEncryptCerts/chain.pem").standardized
-            let myCertPath = URL(fileURLWithPath: #file).appendingPathComponent("../../Certs/letsEncryptCerts/cert.pem").standardized
-            let myKeyPath = URL(fileURLWithPath: #file).appendingPathComponent("../../Certs/letsEncryptCerts/key.pem").standardized
+            let myCAPath = URL(fileURLWithPath: #file).appendingPathComponent("../../../Certs/freeSSL/chain.pem").standardized
+            let myCertPath = URL(fileURLWithPath: #file).appendingPathComponent("../../../Certs/freeSSL/cert.pem").standardized
+            let myKeyPath = URL(fileURLWithPath: #file).appendingPathComponent("../../../Certs/freeSSL/key.pem").standardized
             let config = TLSConfiguration(withCACertificateFilePath: myCAPath.path, usingCertificateFile: myCertPath.path, withKeyFile: myKeyPath.path, usingSelfSignedCerts: false)
+            
+            print("myCAPath is at: \(myCAPath.absoluteString) ")
+            print("myCertPath is at: \(myCertPath.absoluteString) ")
+            print("myKeyPath is at: \(myKeyPath.absoluteString) ")
+
         #else
-             let myP12 = URL(fileURLWithPath: #file).appendingPathComponent("../../../Certs/letsEncryptCerts/cert.pfx").standardized
-             let myPassword = "password"
-             let config = TLSConfiguration(withChainFilePath: myP12.path, withPassword: myPassword, usingSelfSignedCerts: false)
+            let myP12 = URL(fileURLWithPath: #file).appendingPathComponent("../../../Certs/freeSSL/cert.pfx").standardized
+            let myPassword = "password"
+            let config = TLSConfiguration(withChainFilePath: myP12.path, withPassword: myPassword, usingSelfSignedCerts: false)
+            print("myCertPath is at: \(myP12.absoluteString) ")
+
         #endif
         
         return config
     }
-    #if os(OSX)
-    static var allSecureTests = [
-        ("testOkEndToEndSecure", testOkEndToEndSecure),
-        ("testHelloEndToEndSecure", testHelloEndToEndSecure),
-        ("testSimpleHelloEndToEndSecure", testSimpleHelloEndToEndSecure),
-        ("testRequestEchoEndToEndSecure", testRequestEchoEndToEndSecure),
-        ("testRequestKeepAliveEchoEndToEndSecure", testRequestKeepAliveEchoEndToEndSecure),
-        ("testRequestLargeEchoEndToEndSecure", testRequestLargeEchoEndToEndSecure),
-        ]
-    #endif
-
     
     static var allTests = [
         ("testEcho", testEcho),
@@ -764,13 +869,13 @@ class ServerTests: XCTestCase {
         ("testRequestLargeEchoEndToEnd", testRequestLargeEchoEndToEnd),
         ("testExplicitCloseConnections", testExplicitCloseConnections),
         ("testRequestLargePostHelloWorld", testRequestLargePostHelloWorld),
-        ("testOkEndToEndSecure", testOkEndToEndSecure),
-        ("testHelloEndToEndSecure", testHelloEndToEndSecure),
-        ("testSimpleHelloEndToEndSecure", testSimpleHelloEndToEndSecure),
-        ("testRequestEchoEndToEndSecure", testRequestEchoEndToEndSecure),
-        ("testRequestKeepAliveEchoEndToEndSecure", testRequestKeepAliveEchoEndToEndSecure),
-        ("testRequestLargeEchoEndToEndSecure", testRequestLargeEchoEndToEndSecure),
-        ("testRequestLargePostHelloWorldSecure", testRequestLargePostHelloWorldSecure),
+        ("testOkEndToEndCASecure", testOkEndToEndCASecure),
+        ("testHelloEndToEndCASecure", testHelloEndToEndCASecure),
+        ("testSimpleHelloEndToEndCASecure", testSimpleHelloEndToEndCASecure),
+        ("testRequestEchoEndToEndCASecure", testRequestEchoEndToEndCASecure),
+        ("testRequestKeepAliveEchoEndToEndCASecure", testRequestKeepAliveEchoEndToEndCASecure),
+        ("testRequestLargeEchoEndToEndCASecure", testRequestLargeEchoEndToEndCASecure),
+        ("testRequestLargePostHelloWorldCASecure", testRequestLargePostHelloWorldCASecure),
     ]
 }
 
