@@ -22,7 +22,7 @@ func hello(request: HTTPRequest, response: HTTPResponseWriter ) -> HTTPBodyProce
 let server = HTTPServer()
 try! server.start(port: 8080, handler: hello)
 
-CFRunLoopRun()
+RunLoop.current.run()
 ```
 
 The `hello()` function receives a `HTTPRequest` that describes the request and a `HTTPResponseWriter` used to write a response. 
@@ -56,7 +56,7 @@ func echo(request: HTTPRequest, response: HTTPResponseWriter ) -> HTTPBodyProces
 let server = HTTPServer()
 try! server.start(port: 8080, handler: echo)
 
-CFRunLoopRun()
+RunLoop.current.run()
 ```
 As the Echo server needs to process the request body data and return it in the reponse, the `echo()` function returns a `.processBody` closure. This closure is called with `.chunk` when data is available for processing from the request, and `.end` when no more data is available.
 
@@ -68,7 +68,9 @@ When the response is complete, `response.done()` should be called.
 Full Jazzy documentation of the API is available here:  
 <https://swift-server.github.io/http/>
 
- 
+## Contributing Feedback
+We are actively seeking feedback on this prototype and your comments are extremely valuable. If you have any comments on the API design, the implementation, or any other aspects of this project, please email the [`swift-server-dev`](https://lists.swift.org/mailman/listinfo/swift-server-dev) mailing list.
+
 ## Acknowledgements
 This project is based on an inital proposal from @weissi on the swift-server-dev mailing list:  
 <https://lists.swift.org/pipermail/swift-server-dev/Week-of-Mon-20170403/000422.html>

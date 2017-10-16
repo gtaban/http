@@ -24,7 +24,7 @@ class ServerTests: XCTestCase {
     }
 
     func testEcho() {
-        let testString="This is a test"
+        let testString = "This is a test"
         let request = HTTPRequest(method: .post, target: "/echo", httpVersion: HTTPVersion(major: 1, minor: 1), headers: ["X-foo": "bar"])
         let resolver = TestResponseResolver(request: request, requestBody: testString.data(using: .utf8)!)
         resolver.resolveHandler(EchoHandler().handle)
@@ -754,7 +754,6 @@ class ServerTests: XCTestCase {
                 httpStr = "http"
                 urlStr = "localhost"
             }
-
             print("Test \(#function) on port \(server.port)")
             
             let url = URL(string: "\(httpStr)://\(urlStr):\(server.port)/echo")!
@@ -787,11 +786,13 @@ class ServerTests: XCTestCase {
 
     func testExplicitCloseConnections() {
         let expectation = self.expectation(description: "0 Open Connection")
-        let server = HTTPServer()
+        let server = PoCSocketSimpleServer()
+        let keepAliveTimeout = 0.1
+
         do {
-            try server.start(port: 0, handler: OkHandler().handle)
+            try server.start(port: 0, keepAliveTimeout: keepAliveTimeout, handler: OkHandler().handle)
             
-            let session = URLSession(configuration: URLSessionConfiguration.default)
+            let session = URLSession(configuration: .default)
             let url1 = URL(string: "http://localhost:\(server.port)")!
             var request = URLRequest(url: url1)
             request.httpMethod = "POST"
@@ -805,7 +806,7 @@ class ServerTests: XCTestCase {
                 
                     // Darwin's URLSession replaces the `Connection: close` header with `Connection: keep-alive`, so allow it to expire
                 #else
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + keepAliveTimeout) {
                         XCTAssertEqual(server.connectionCount, 0)
                         expectation.fulfill()
                     }

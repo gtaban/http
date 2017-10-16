@@ -152,6 +152,10 @@ public class PoCSocketConnectionListener: ParserConnecting {
 
     /// Check if the socket is idle, and if so, call close()
     func closeIfIdleSocket() {
+        if !self.responseCompleted {
+            //We're in the middle of a connection - we're not idle
+            return
+        }
         let now = Date().timeIntervalSinceReferenceDate
         if let keepAliveUntil = parser?.keepAliveUntil, now >= keepAliveUntil {
             print("Closing idle socket \(socketFD)")
@@ -171,15 +175,13 @@ public class PoCSocketConnectionListener: ParserConnecting {
 
     /// Called by the parser to let us know that a response has started being created
     public func responseBeginning() {
-        self.socketWriterQueue.async { [weak self] in
-            self?.responseCompleted = false
-        }
+        self.responseCompleted = false
     }
 
     /// Called by the parser to let us know that a response is complete, and we can close after timeout
     public func responseComplete() {
+        self.responseCompleted = true
         self.socketWriterQueue.async { [weak self] in
-            self?.responseCompleted = true
             if self?.readerSource?.isCancelled ?? true {
                 self?.close()
             }
@@ -188,8 +190,8 @@ public class PoCSocketConnectionListener: ParserConnecting {
     
     /// Called by the parser to let us know that a response is complete and we should close the socket
     public func responseCompleteCloseWriter() {
+        self.responseCompleted = true
         self.socketWriterQueue.async { [weak self] in
-            self?.responseCompleted = true
             self?.close()
         }
     }
@@ -242,14 +244,12 @@ public class PoCSocketConnectionListener: ParserConnecting {
                                 print("Error: wrong number of bytes consumed by parser (\(numberParsed) instead of \(data.count)")
                             }
                         }
-                        
-                        // a TLS record is first read in and decrypted and then buffered.
+                        readBuffer.deallocate(capacity: maxLength)
+
+                        // a TLS record is first read in & decrypted and then buffered.
                         // bytesRemainToBeRead will store the number of bytes buffered by SSL layer
                         bytesRemainToBeRead = try (strongSelf.socket?.TLSdelegate as? TLSService)?.getPendingBytes() ?? -1
-                        
                     } while ( bytesRemainToBeRead > 0 )
-                    
-                    
                 } else {
                     print("bad socket FD while reading")
                     length = -1
