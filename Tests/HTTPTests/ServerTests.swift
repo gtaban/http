@@ -270,8 +270,6 @@ class ServerTests: XCTestCase {
                 }
             }
             server.stop()
-            print("\(#function) stopping server")
-
         } catch {
             XCTFail("Error listening on port \(0): \(error). Use server.failed(callback:) to handle")
         }
@@ -458,7 +456,7 @@ class ServerTests: XCTestCase {
                     XCTFail("\(error)")
                 }
             }
-            //server.stop()
+            server.stop()
         } catch {
             XCTFail("Error listening on port \(0): \(error). Use server.failed(callback:) to handle")
         }
@@ -594,7 +592,7 @@ class ServerTests: XCTestCase {
                     XCTFail("\(error)")
                 }
             }
-            //server.stop()
+            server.stop()
         } catch {
             XCTFail("Error listening on port \(0): \(error). Use server.failed(callback:) to handle")
         }
@@ -768,7 +766,11 @@ class ServerTests: XCTestCase {
                 XCTAssertEqual("Hello, World!", String(data: responseBody ?? Data(), encoding: .utf8) ?? "Nil")
                 XCTAssertEqual(Int(testHandler.chunkCalledCount), 1)
                 XCTAssertLessThan(testHandler.chunkLength, executableLength, "Should have written less than the length of the file")
-                XCTAssertLessThanOrEqual(Int(testHandler.chunkLength), chunkSize)
+                if ((tlsParams != nil) && (chunkSize < TLSParams.maxTLSRecordLength)) {
+                    XCTAssertLessThanOrEqual(Int(testHandler.chunkLength), TLSParams.maxTLSRecordLength)
+                } else {
+                    XCTAssertLessThanOrEqual(Int(testHandler.chunkLength), chunkSize)
+                }
                 receivedExpectation.fulfill()
             }
             uploadTask.resume()
@@ -868,22 +870,22 @@ class ServerTests: XCTestCase {
         ("testSimpleHello", testSimpleHello),
         ("testResponseOK", testResponseOK),
         ("testOkEndToEnd", testOkEndToEnd),
+        ("testOkEndToEndCASecure", testOkEndToEndCASecure),
         ("testHelloEndToEnd", testHelloEndToEnd),
+        ("testHelloEndToEndCASecure", testHelloEndToEndCASecure),
         ("testSimpleHelloEndToEnd", testSimpleHelloEndToEnd),
+        ("testSimpleHelloEndToEndCASecure", testSimpleHelloEndToEndCASecure),
         ("testRequestEchoEndToEnd", testRequestEchoEndToEnd),
+        ("testRequestEchoEndToEndCASecure", testRequestEchoEndToEndCASecure),
         ("testRequestKeepAliveEchoEndToEnd", testRequestKeepAliveEchoEndToEnd),
+        ("testRequestKeepAliveEchoEndToEndCASecure", testRequestKeepAliveEchoEndToEndCASecure),
         ("testRequestLargeEchoEndToEnd", testRequestLargeEchoEndToEnd),
+        ("testRequestLargeEchoEndToEndCASecure", testRequestLargeEchoEndToEndCASecure),
         ("testExplicitCloseConnections", testExplicitCloseConnections),
         ("testMultipleRequestWithoutKeepAliveEchoEndToEnd",testMultipleRequestWithoutKeepAliveEchoEndToEnd),
+        ("testMultipleRequestWithoutKeepAliveEchoEndToEndCASecure", testMultipleRequestWithoutKeepAliveEchoEndToEndCASecure),
         ("testRequestLargePostHelloWorld", testRequestLargePostHelloWorld),
-        ("testOkEndToEndCASecure", testOkEndToEndCASecure),
-        ("testHelloEndToEndCASecure", testHelloEndToEndCASecure),
-        ("testSimpleHelloEndToEndCASecure", testSimpleHelloEndToEndCASecure),
-        ("testRequestEchoEndToEndCASecure", testRequestEchoEndToEndCASecure),
-        ("testRequestKeepAliveEchoEndToEndCASecure", testRequestKeepAliveEchoEndToEndCASecure),
-        ("testRequestLargeEchoEndToEndCASecure", testRequestLargeEchoEndToEndCASecure),
         ("testRequestLargePostHelloWorldCASecure", testRequestLargePostHelloWorldCASecure),
-        ("testMultipleRequestWithoutKeepAliveEchoEndToEndCASecure", testMultipleRequestWithoutKeepAliveEchoEndToEndCASecure)
     ]
 }
 

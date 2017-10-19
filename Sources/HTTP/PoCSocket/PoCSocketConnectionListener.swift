@@ -73,6 +73,11 @@ public class PoCSocketConnectionListener: ParserConnecting {
     ///Largest number of bytes we're willing to allocate for a Read
     // it's an anti-heartbleed-type paranoia check
     private var maxReadLength: Int = 1048576
+    
+    // Minimum size of a Read to guarantee we always read the entire TLS record
+    // and not leave any pending data buffered in TLS layer
+    // Max size of TLS record in Bytes
+    private let maxTLSRecordLength: Int = 16384
 
     /// initializer
     ///
@@ -226,30 +231,27 @@ public class PoCSocketConnectionListener: ParserConnecting {
                     if (maxLength > strongSelf.maxReadLength) || (maxLength <= 0) {
                         maxLength = strongSelf.maxReadLength
                     }
-                    var bytesRemainToBeRead = maxLength
-
-                    repeat {
-                        if (maxLength > bytesRemainToBeRead) {
-                            maxLength = bytesRemainToBeRead
+                    
+                    // make sure we read all data buffered by TLS layer
+                    if let secure = strongSelf.socket?.isConnectionSecure {
+                        if (secure && (maxLength < strongSelf.maxTLSRecordLength)) {
+                            maxLength = strongSelf.maxTLSRecordLength
                         }
-                        var readBuffer: UnsafeMutablePointer<Int8> = UnsafeMutablePointer<Int8>.allocate(capacity: maxLength)
-                        length = try strongSelf.socket?.socketRead(into: &readBuffer, maxLength:maxLength) ?? -1
-                        if length > 0 {
-                            self?.responseCompleted = false
-                            
-                            let data = Data(bytes: readBuffer, count: length)
-                            let numberParsed = strongSelf.parser?.readStream(data:data) ?? 0
-                            
-                            if numberParsed != data.count {
-                                print("Error: wrong number of bytes consumed by parser (\(numberParsed) instead of \(data.count)")
-                            }
-                        }
-                        readBuffer.deallocate(capacity: maxLength)
+                    }
 
-                        // a TLS record is first read in & decrypted and then buffered.
-                        // bytesRemainToBeRead will store the number of bytes buffered by SSL layer
-                        bytesRemainToBeRead = try (strongSelf.socket?.TLSdelegate as? TLSService)?.getPendingBytes() ?? -1
-                    } while ( bytesRemainToBeRead > 0 )
+                    var readBuffer: UnsafeMutablePointer<Int8> = UnsafeMutablePointer<Int8>.allocate(capacity: maxLength)
+                    length = try strongSelf.socket?.socketRead(into: &readBuffer, maxLength:maxLength) ?? -1
+                    if length > 0 {
+                        self?.responseCompleted = false
+                        
+                        let data = Data(bytes: readBuffer, count: length)
+                        let numberParsed = strongSelf.parser?.readStream(data:data) ?? 0
+                        
+                        if numberParsed != data.count {
+                            print("Error: wrong number of bytes consumed by parser (\(numberParsed) instead of \(data.count)")
+                        }
+                    }
+                    readBuffer.deallocate(capacity: maxLength)
                 } else {
                     print("bad socket FD while reading")
                     length = -1
