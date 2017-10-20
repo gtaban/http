@@ -67,17 +67,6 @@ internal class PoCSocket: ConnectionDelegate {
     /// Delegate that provides the TLS implementation
     public var TLSdelegate: TLSServiceDelegate? = nil
     
-    // track if connection is secure
-    public var isConnectionSecure: Bool {
-        get {
-            if self.TLSdelegate != nil {
-                return true
-            } else {
-                return false
-            }
-        }
-    }
-
     /// Call recv(2) with buffer allocated by our caller and return the output
     ///
     /// - Parameters:
@@ -103,14 +92,12 @@ internal class PoCSocket: ConnectionDelegate {
         readBuffer.initialize(to: 0x0, count: maxLength)
         
         let read: Int
-        
-        switch isConnectionSecure {
-        case true:   // HTTPS
-            read = try TLSdelegate!.willReceive(into: readBuffer, bufSize: maxLength)
-            break
-        case false: // HTTP
+        if let tls = self.TLSdelegate {
+            // HTTPS
+            read = try tls.willReceive(into: readBuffer, bufSize: maxLength)
+        } else {
+            // HTTP
             read = recv(self.socketfd, readBuffer, maxLength, Int32(0))
-            break
         }
 
         //Leave this as a local variable to facilitate Setting a Watchpoint in lldb
@@ -139,13 +126,12 @@ internal class PoCSocket: ConnectionDelegate {
         }
 
         let sent: Int
-        switch isConnectionSecure {
-        case true:   // HTTPS
-            sent = try TLSdelegate!.willSend(buffer: buffer, bufSize: Int(bufSize))
-            break
-        case false: // HTTP
+        if let tls = self.TLSdelegate {
+            // HTTPS
+            sent = try tls.willSend(buffer: buffer, bufSize: Int(bufSize))
+        } else {
+            // HTTP
             sent = send(self.socketfd, buffer, Int(bufSize), Int32(0))
-            break
         }
 
         //Leave this as a local variable to facilitate Setting a Watchpoint in lldb
@@ -156,8 +142,8 @@ internal class PoCSocket: ConnectionDelegate {
     internal func shutdownAndClose() {
         self.isShuttingDown = true
         
-        if isConnectionSecure {
-            TLSdelegate?.willDestroy()
+        if let tls = self.TLSdelegate {
+            tls.willDestroy()
         }
 
         if socketfd < 1 {
@@ -214,8 +200,8 @@ internal class PoCSocket: ConnectionDelegate {
         retVal.socketfd = acceptFD
         
         // Delegate does post accept handling and verification
-        if isConnectionSecure {
-                try TLSdelegate?.didAccept(connection: retVal)
+        if let tls = self.TLSdelegate {
+                try tls.didAccept(connection: retVal)
         }
         
         return retVal
@@ -239,8 +225,8 @@ internal class PoCSocket: ConnectionDelegate {
         }
         
         // Initialize delegate
-        if isConnectionSecure {
-            try TLSdelegate?.didCreateServer()
+        if let tls = self.TLSdelegate {
+            try tls.didCreateServer()
         }
 
         var on: Int32 = 1
@@ -298,25 +284,6 @@ internal class PoCSocket: ConnectionDelegate {
         //print("listeningPort is \(listeningPort)")
     }
     
-    private func htonsPort(port: in_port_t) -> in_port_t {
-        #if os(Linux)
-            return htons(port)
-        #else
-            let isLittleEndian = Int(OSHostByteOrder()) == OSLittleEndian
-            return isLittleEndian ? _OSSwapInt16(port) : port
-        #endif
-    }
-
-    private func ntohsPort(port: in_port_t) -> in_port_t {
-        #if os(Linux)
-            return ntohs(port)
-        #else
-            let isLittleEndian = Int(OSHostByteOrder()) == OSLittleEndian
-            return isLittleEndian ? htonsPort(port: CUnsignedShort(port)) : port
-            //return isLittleEndian ? _OSSwapInt32(__uint32_t(port)) : port
-        #endif
-    }
-
     /// Check to see if socket is being used
     ///
     /// - Returns: whether socket is listening or connected

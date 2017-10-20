@@ -8,7 +8,7 @@
 
 import Foundation
 import Dispatch
-import TLSService
+import ServerSecurity
 
 ///:nodoc:
 public class PoCSocketConnectionListener: ParserConnecting {
@@ -74,11 +74,6 @@ public class PoCSocketConnectionListener: ParserConnecting {
     // it's an anti-heartbleed-type paranoia check
     private var maxReadLength: Int = 1048576
     
-    // Minimum size of a Read to guarantee we always read the entire TLS record
-    // and not leave any pending data buffered in TLS layer
-    // Max size of TLS record in Bytes
-    private let maxTLSRecordLength: Int = 16384
-
     /// initializer
     ///
     /// - Parameters:
@@ -233,9 +228,9 @@ public class PoCSocketConnectionListener: ParserConnecting {
                     }
                     
                     // make sure we read all data buffered by TLS layer
-                    if let secure = strongSelf.socket?.isConnectionSecure {
-                        if (secure && (maxLength < strongSelf.maxTLSRecordLength)) {
-                            maxLength = strongSelf.maxTLSRecordLength
+                    if let socket = strongSelf.socket {
+                        if (socket.TLSdelegate != nil && (maxLength < TLSConstants.maxTLSRecordLength)) {
+                            maxLength = TLSConstants.maxTLSRecordLength
                         }
                     }
 

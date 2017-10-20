@@ -766,8 +766,8 @@ class ServerTests: XCTestCase {
                 XCTAssertEqual("Hello, World!", String(data: responseBody ?? Data(), encoding: .utf8) ?? "Nil")
                 XCTAssertEqual(Int(testHandler.chunkCalledCount), 1)
                 XCTAssertLessThan(testHandler.chunkLength, executableLength, "Should have written less than the length of the file")
-                if ((tlsParams != nil) && (chunkSize < TLSParams.maxTLSRecordLength)) {
-                    XCTAssertLessThanOrEqual(Int(testHandler.chunkLength), TLSParams.maxTLSRecordLength)
+                if ((tlsParams != nil) && (chunkSize < TLSConstants.maxTLSRecordLength)) {
+                    XCTAssertLessThanOrEqual(Int(testHandler.chunkLength), TLSConstants.maxTLSRecordLength)
                 } else {
                     XCTAssertLessThanOrEqual(Int(testHandler.chunkLength), chunkSize)
                 }

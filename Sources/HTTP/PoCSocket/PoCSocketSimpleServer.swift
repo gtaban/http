@@ -82,8 +82,8 @@ public class PoCSocketSimpleServer: CurrentConnectionCounting {
         }
         // Setting up TLS...
         if let tlsConfig = tlsConfig {
-            let security = try TLSService(usingConfiguration: tlsConfig)
-            self.serverSocket.TLSdelegate = security
+            let tls = try TLSService(usingConfiguration: tlsConfig)
+            self.serverSocket.TLSdelegate = tls
         }
 
         try self.serverSocket.bindAndListen(on: port)
