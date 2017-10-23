@@ -14,12 +14,12 @@ import ServerSecurity
 
 class TLSServerTests: XCTestCase {
     
-    func testOkEndToEndCASecure() {
+    func testOkEndToEndTLSwithCA() {
         let config = createCASignedTLSConfig()
         testOkEndToEndInternal(tlsParams: TLSParams(config: config, selfsigned: false))
     }
     
-    func testOkEndToEndSelfSignedSecure() {
+    func testOkEndToEndTLSwithSelfSigned() {
         let config = createSelfSignedTLSConfig()
         testOkEndToEndInternal(tlsParams: TLSParams(config: config, selfsigned: true))
     }
@@ -78,12 +78,12 @@ class TLSServerTests: XCTestCase {
         }
     }
     
-    func testHelloEndToEndCASecure() {
+    func testHelloEndToEndTLSwithCA() {
         let config = createCASignedTLSConfig()
         testHelloEndToEndInternal(tlsParams: TLSParams(config: config, selfsigned: false))
     }
     
-    func testHelloEndToEndSelfSignedSecure() {
+    func testHelloEndToEndTLSwithSelfSigned() {
         let config = createSelfSignedTLSConfig()
         testHelloEndToEndInternal(tlsParams: TLSParams(config: config, selfsigned: true))
     }
@@ -144,7 +144,7 @@ class TLSServerTests: XCTestCase {
         }
     }
     
-    func testSimpleHelloEndToEndCASecure() {
+    func testSimpleHelloEndToEndTLSwithCA() {
         let config = createCASignedTLSConfig()
         let receivedExpectation = self.expectation(description: "Received web response \(#function)")
         let session: URLSession
@@ -188,7 +188,7 @@ class TLSServerTests: XCTestCase {
         }
     }
     
-    func testRequestEchoEndToEndCASecure() {
+    func testRequestEchoEndToEndTLSwithCA() {
         let config = createCASignedTLSConfig()
         let receivedExpectation = self.expectation(description: "Received web response \(#function)")
         let session: URLSession
@@ -227,7 +227,7 @@ class TLSServerTests: XCTestCase {
         }
     }
     
-    func testRequestKeepAliveEchoEndToEndCASecure() {
+    func testRequestKeepAliveEchoEndToEndTLSwithCA() {
         let config = createCASignedTLSConfig()
         let receivedExpectation1 = self.expectation(description: "Received web response 1: \(#function)")
         let receivedExpectation2 = self.expectation(description: "Received web response 2: \(#function)")
@@ -311,7 +311,7 @@ class TLSServerTests: XCTestCase {
         }
     }
     
-    func testMultipleRequestWithoutKeepAliveEchoEndToEndCASecure() {
+    func testMultipleRequestWithoutKeepAliveEchoEndToEndTLSwithCA() {
         let config = createCASignedTLSConfig()
         let receivedExpectation1 = self.expectation(description: "Received web response 1: \(#function)")
         let receivedExpectation2 = self.expectation(description: "Received web response 2: \(#function)")
@@ -406,7 +406,7 @@ class TLSServerTests: XCTestCase {
         }
     }
     
-    func testRequestLargeEchoEndToEndCASecure() {
+    func testRequestLargeEchoEndToEndTLSwithCA() {
         let config = createCASignedTLSConfig()
         let receivedExpectation = self.expectation(description: "Received web response \(#function)")
         let session: URLSession
@@ -466,7 +466,7 @@ class TLSServerTests: XCTestCase {
         }
     }
     
-    func testRequestLargePostHelloWorldCASecure() {
+    func testRequestLargePostHelloWorldTLSwithCA() {
         let config = createCASignedTLSConfig()
         let receivedExpectation = self.expectation(description: "Received web response \(#function)")
         let session: URLSession
@@ -566,14 +566,14 @@ class TLSServerTests: XCTestCase {
     }
     
     static var allTests = [
-        ("testOkEndToEndCASecure", testOkEndToEndCASecure),
-        ("testHelloEndToEndCASecure", testHelloEndToEndCASecure),
-        ("testSimpleHelloEndToEndCASecure", testSimpleHelloEndToEndCASecure),
-        ("testRequestEchoEndToEndCASecure", testRequestEchoEndToEndCASecure),
-        ("testRequestKeepAliveEchoEndToEndCASecure", testRequestKeepAliveEchoEndToEndCASecure),
-        ("testRequestLargeEchoEndToEndCASecure", testRequestLargeEchoEndToEndCASecure),
-        ("testMultipleRequestWithoutKeepAliveEchoEndToEndCASecure", testMultipleRequestWithoutKeepAliveEchoEndToEndCASecure),
-        ("testRequestLargePostHelloWorldCASecure", testRequestLargePostHelloWorldCASecure),
+        ("testOkEndToEndTLSwithCA", testOkEndToEndTLSwithCA),
+        ("testHelloEndToEndTLSwithCA", testHelloEndToEndTLSwithCA),
+        ("testSimpleHelloEndToEndTLSwithCA", testSimpleHelloEndToEndTLSwithCA),
+        ("testRequestEchoEndToEndTLSwithCA", testRequestEchoEndToEndTLSwithCA),
+        ("testRequestKeepAliveEchoEndToEndTLSwithCA", testRequestKeepAliveEchoEndToEndTLSwithCA),
+        ("testRequestLargeEchoEndToEndTLSwithCA", testRequestLargeEchoEndToEndTLSwithCA),
+        ("testMultipleRequestWithoutKeepAliveEchoEndToEndTLSwithCA", testMultipleRequestWithoutKeepAliveEchoEndToEndTLSwithCA),
+        ("testRequestLargePostHelloWorldTLSwithCA", testRequestLargePostHelloWorldTLSwithCA),
         ]
 }
 
