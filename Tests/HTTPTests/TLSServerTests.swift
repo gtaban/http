@@ -14,6 +14,45 @@ import ServerSecurity
 
 class TLSServerTests: XCTestCase {
     
+    func testCACertExpiration() {
+        // test the expiration of the Let'sEncrypt certs
+        // If this test fails, all *withCA() tests will fail until the LetsEncrypt certs are regenerated.
+        
+        let myCAPathURL = URL(fileURLWithPath: #file).appendingPathComponent("../../../Certs/letsEncryptCA/cert.pem").standardized
+        let myCAPath = myCAPathURL.absoluteString.replacingOccurrences(of: "file://", with: "")
+
+        let shell = Shell()
+        // Get expiration date of cert
+        // $ /usr/bin/openssl x509 -noout -in Certs/letsEncryptCA/cert.pem -enddate
+        let certExpiration = shell.findAndExecute(commandName: "openssl", arguments: ["x509", "-noout", "-in", myCAPath, "-enddate"])
+        guard var expirationDate = certExpiration else {
+            XCTFail("Bad commandline OpenSSL result")
+            return
+        }
+        
+        // "notAfter=Jan 14 15:03:58 2018 GMT\n"
+        expirationDate = expirationDate.replacingOccurrences(of: "notAfter=", with: "")
+        expirationDate = expirationDate.trimmingCharacters(in: CharacterSet.newlines)
+
+        // "Jan 14 15:03:58 2018 GMT"
+        #if os(OSX)
+            // date -j -f "%b %d %T %Y %Z" "${ENDDATE}" +%s
+            let expirationInSeconds = shell.findAndExecute(commandName: "date", arguments: ["-j", "-f", "'%b %d %T %Y %Z'", "'\(expirationDate)'", "+%s"])
+        #else
+            // date +%s -d "${ENDDATE}"
+            let expirationInSeconds = shell.findAndExecute(commandName: "date" , arguments:[ "+%s", "--date", "\(expirationDate)" ])
+        #endif
+        
+        let timeNow = Date().timeIntervalSince1970
+        
+        if let x = expirationInSeconds , let y = Int(x.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)) {
+            print("Lets Encrypt certs are valid for another \((y-Int(timeNow))/(3600*24)) days!")
+            XCTAssertGreaterThan(y-Int(timeNow), 0, "Let's Encrypt certs have EXPIRED! Please renew for tests to pass.")
+        } else {
+            XCTFail("Bad commandline date result")
+        }
+    }
+    
     func testOkEndToEndTLSwithCA() {
         let config = createCASignedTLSConfig()
         testOkEndToEndInternal(tlsParams: TLSParams(config: config, selfsigned: false))
@@ -57,7 +96,6 @@ class TLSServerTests: XCTestCase {
             }
             let url = URL(string: "\(httpStr)://\(urlStr):\(server.port)/")!
             print("Test \(#function) on port \(server.port)")
-            print("url = \(url.absoluteString) ")
             let dataTask = session.dataTask(with: url) { (responseBody, rawResponse, error) in
                 let response = rawResponse as? HTTPURLResponse
                 XCTAssertNil(error, "\(error!.localizedDescription)")
@@ -566,6 +604,7 @@ class TLSServerTests: XCTestCase {
     }
     
     static var allTests = [
+        ("testCACertExpiration", testCACertExpiration),
         ("testOkEndToEndTLSwithCA", testOkEndToEndTLSwithCA),
         ("testHelloEndToEndTLSwithCA", testHelloEndToEndTLSwithCA),
         ("testSimpleHelloEndToEndTLSwithCA", testSimpleHelloEndToEndTLSwithCA),
