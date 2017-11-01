@@ -14,9 +14,9 @@ import ServerSecurity
 
 class TLSServerTests: XCTestCase {
     
+    // Test the expiration of the Let'sEncrypt certs
+    // If this test fails, all *withCA() tests will fail until the LetsEncrypt certs are regenerated.
     func testCACertExpiration() {
-        // test the expiration of the Let'sEncrypt certs
-        // If this test fails, all *withCA() tests will fail until the LetsEncrypt certs are regenerated.
         
         let myCAPathURL = URL(fileURLWithPath: #file).appendingPathComponent("../../../Certs/letsEncryptCA/cert.pem").standardized
         let myCAPath = myCAPathURL.absoluteString.replacingOccurrences(of: "file://", with: "")
@@ -53,8 +53,8 @@ class TLSServerTests: XCTestCase {
         }
     }
     
+    // Ensure an HTTPS test is added for every end-to-end HTTP test
     func testVerifyHTTPSTestNotMissing() {
-        // Ensure we add a HTTPS test for every end-to-end HTTP test we add
 
         // print("HTTP tests count = \(ServerTests.allTests)")
         let httpTestsCount = ServerTests.allTests.filter{ (key, _) in key.contains("EndToEnd") }.count
@@ -67,6 +67,35 @@ class TLSServerTests: XCTestCase {
         XCTAssertEqual(httpTestsCount, httpsTestCount, "Missing HTTPS test. Please add corresponding HTTPS test for all EndToEnd server tests.")
     }
     
+    // Ensure we handle bad cert ok
+    // Use a self-signed cert without proper overriding of URLSession.
+    func testBadCertificate() {
+        let receivedExpectation = self.expectation(description: "Received web response \(#function)")
+        let config = createSelfSignedTLSConfig()
+        
+        let server = HTTPServer()
+        do {
+            try server.start(port: 0, tls: config, handler: OkHandler().handle)
+            let session = URLSession(configuration: URLSessionConfiguration.default)
+            
+            let url = URL(string: "https://localhost:\(server.port)/")!
+            print("Test \(#function) on port \(server.port)")
+            let dataTask = session.dataTask(with: url) { (responseBody, rawResponse, error) in
+                XCTAssertNotNil(error, "\(error!.localizedDescription)")
+                receivedExpectation.fulfill()
+            }
+            dataTask.resume()
+            self.waitForExpectations(timeout: 10) { (error) in
+                if let error = error {
+                    XCTFail("\(error)")
+                }
+            }
+            server.stop()
+        } catch {
+            XCTFail("Error listening on port \(0): \(error). Use server.failed(callback:) to handle")
+        }
+    }
+
     func testOkEndToEndTLSwithCA() {
         let config = createCASignedTLSConfig()
         testOkEndToEndInternal(tlsParams: TLSParams(config: config, selfsigned: false))
@@ -619,6 +648,8 @@ class TLSServerTests: XCTestCase {
     
     static var allTests = [
         ("testCACertExpiration", testCACertExpiration),
+        ("testVerifyHTTPSTestNotMissing", testVerifyHTTPSTestNotMissing),
+        ("testBadCertificate", testBadCertificate),
         ("testOkEndToEndTLSwithCA", testOkEndToEndTLSwithCA),
         ("testHelloEndToEndTLSwithCA", testHelloEndToEndTLSwithCA),
         ("testSimpleHelloEndToEndTLSwithCA", testSimpleHelloEndToEndTLSwithCA),
