@@ -53,6 +53,20 @@ class TLSServerTests: XCTestCase {
         }
     }
     
+    func testVerifyHTTPSTestNotMissing() {
+        // Ensure we add a HTTPS test for every end-to-end HTTP test we add
+
+        // print("HTTP tests count = \(ServerTests.allTests)")
+        let httpTestsCount = ServerTests.allTests.filter{ (key, _) in key.contains("EndToEnd") }.count
+        // print("HTTP tests count = \(httpTestsCount) ")
+        
+        // in HTTPS we count only *withCA since these also run on Linux
+        let httpsTestCount = TLSServerTests.allTests.filter{ (key, _) in key.contains("withCA")}.count
+       // print("HTTPS tests count = \(httpsTestCount)")
+
+        XCTAssertEqual(httpTestsCount, httpsTestCount, "Missing HTTPS test. Please add corresponding HTTPS test for all EndToEnd server tests.")
+    }
+    
     func testOkEndToEndTLSwithCA() {
         let config = createCASignedTLSConfig()
         testOkEndToEndInternal(tlsParams: TLSParams(config: config, selfsigned: false))
