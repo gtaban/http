@@ -30,10 +30,10 @@ class TLSServerTests: XCTestCase {
         let urlStr: String
         let session: URLSession
         
-        let server = HTTPServer()
+        let options = HTTPServer.Options(onPort: 0, withTLS: tlsParams?.config ?? nil, withHandler: OkHandler().handle)
+        let server = HTTPServer(with: options)
         do {
             if let tlsParams = tlsParams {
-                try server.start(port: 0, tls: tlsParams.config, handler: OkHandler().handle)
                 httpStr = "https"
                 
                 if tlsParams.selfsigned {
@@ -50,11 +50,12 @@ class TLSServerTests: XCTestCase {
                     urlStr = "ssl.gelareh.xyz"
                 }
             } else {
-                try server.start(port: 0, handler: OkHandler().handle)
                 session = URLSession(configuration: URLSessionConfiguration.default)
                 httpStr = "http"
                 urlStr = "localhost"
             }
+            try server.start()
+            
             let url = URL(string: "\(httpStr)://\(urlStr):\(server.port)/")!
             print("Test \(#function) on port \(server.port)")
             print("url = \(url.absoluteString) ")
@@ -95,10 +96,11 @@ class TLSServerTests: XCTestCase {
         let urlStr: String
         let session: URLSession
         
-        let server = HTTPServer()
+        let options = HTTPServer.Options(onPort: 0, withTLS: tlsParams?.config ?? nil, withHandler: HelloWorldHandler().handle)
+        let server = HTTPServer(with: options)
         do {
+            try server.start()
             if let tlsParams = tlsParams {
-                try server.start(port: 0, tls: tlsParams.config, handler: HelloWorldHandler().handle)
                 httpStr = "https"
                 
                 if tlsParams.selfsigned {
@@ -115,7 +117,6 @@ class TLSServerTests: XCTestCase {
                     urlStr = "ssl.gelareh.xyz"
                 }
             } else {
-                try server.start(port: 0, handler: HelloWorldHandler().handle)
                 session = URLSession(configuration: URLSessionConfiguration.default)
                 httpStr = "http"
                 urlStr = "localhost"
@@ -147,7 +148,6 @@ class TLSServerTests: XCTestCase {
     func testSimpleHelloEndToEndTLSwithCA() {
         let config = createCASignedTLSConfig()
         let receivedExpectation = self.expectation(description: "Received web response \(#function)")
-        let session: URLSession
         
         let simpleHelloWebApp = SimpleResponseCreator { (_, body) -> SimpleResponseCreator.Response in
             return SimpleResponseCreator.Response(
@@ -157,10 +157,11 @@ class TLSServerTests: XCTestCase {
             )
         }
         
-        let server = HTTPServer()
+        let options = HTTPServer.Options(onPort: 0, withTLS: config, withHandler: simpleHelloWebApp.handle)
+        let server = HTTPServer(with: options)
         do {
-            try server.start(port: 0, tls: config, handler: simpleHelloWebApp.handle)
-            session = URLSession(configuration: URLSessionConfiguration.default)
+            try server.start()
+            let session = URLSession(configuration: URLSessionConfiguration.default)
             
             let url = URL(string: "https://ssl.gelareh.xyz:\(server.port)/helloworld")!
             print("Test \(#function) on port \(server.port)")
@@ -191,13 +192,13 @@ class TLSServerTests: XCTestCase {
     func testRequestEchoEndToEndTLSwithCA() {
         let config = createCASignedTLSConfig()
         let receivedExpectation = self.expectation(description: "Received web response \(#function)")
-        let session: URLSession
         let testString = "This is a test"
         
-        let server = HTTPServer()
+        let options = HTTPServer.Options(onPort: 0, withTLS: config, withHandler: EchoHandler().handle)
+        let server = HTTPServer(with: options)
         do {
-            try server.start(port: 0, tls: config, handler: EchoHandler().handle)
-            session = URLSession(configuration: URLSessionConfiguration.default)
+            try server.start()
+            let session = URLSession(configuration: URLSessionConfiguration.default)
             
             let url = URL(string: "https://ssl.gelareh.xyz:\(server.port)/echo")!
             print("Test \(#function) on port \(server.port)")
@@ -235,12 +236,12 @@ class TLSServerTests: XCTestCase {
         let testString1="This is a test"
         let testString2="This is a test, too"
         let testString3="This is also a test"
-        let session: URLSession
         
-        let server = HTTPServer()
+        let options = HTTPServer.Options(onPort: 0, withTLS: config, withHandler: EchoHandler().handle)
+        let server = HTTPServer(with: options)
         do {
-            try server.start(port: 0, tls: config, handler: EchoHandler().handle)
-            session = URLSession(configuration: URLSessionConfiguration.default)
+            try server.start()
+            let session = URLSession(configuration: URLSessionConfiguration.default)
             
             let url = URL(string: "https://ssl.gelareh.xyz:\(server.port)/echo")!
             print("Test \(#function) on port \(server.port)")
@@ -319,12 +320,12 @@ class TLSServerTests: XCTestCase {
         let testString1="This is a test"
         let testString2="This is a test, too"
         let testString3="This is also a test"
-        let session: URLSession
         
-        let server = HTTPServer()
+        let options = HTTPServer.Options(onPort: 0, withTLS: config, withHandler: EchoHandler().handle)
+        let server = HTTPServer(with: options)
         do {
-            try server.start(port: 0, tls: config, handler: EchoHandler().handle)
-            session = URLSession(configuration: URLSessionConfiguration.default)
+            try server.start()
+            let session = URLSession(configuration: URLSessionConfiguration.default)
             
             let url1 = URL(string: "https://ssl.gelareh.xyz:\(server.port)/echo")!
             print("Test \(#function) on port \(server.port)")

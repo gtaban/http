@@ -57,6 +57,16 @@ public class PoCSocketSimpleServer: CurrentConnectionCounting {
         }
     }
 
+    /// A subclass for HTTP Options
+    public class PoCSocketSimpleServerOptions { // a class because subclasses may want to add
+        public var port: Int = 0
+        public var queueCount: Int = 0
+        public var acceptCount: Int = 0
+        public var maxReadLength: Int = 1048576
+        public var keepAliveTimeout: Double = 5.0
+        public var tls: TLSConfiguration? = nil
+    }
+
     /// Starts the server listening on a given port
     ///
     /// - Parameters:
